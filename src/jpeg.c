@@ -6,10 +6,13 @@
 
 #include "jpeg.h"
 #include "csc.h"
+#include "draw.h"
 
 #define printf sceClibPrintf
 
 #define SCE_NULL		((void *)0)
+
+static SceUID fb_uid = -1;
 
 int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSize, const char* fileName)
 {
@@ -168,12 +171,19 @@ int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSi
 
     printf("%dx%d\n", pitchWidth, pitchHeight);
 
+    unsigned int fb_size = ALIGN(4 * 1024 * pitchHeight, 256 * 1024);
+ 
+    fb_uid = sceKernelAllocMemBlock("fb", 0x09408060 , fb_size, NULL);
+ 
+    void *fb_addr = NULL;
+    sceKernelGetMemBlockBase(fb_uid, &fb_addr);
+
 	/*E CSC (YCbCr -> RGBA) */
 	if ((decodeMode & 3) == SCE_JPEG_MJPEG_WITH_DHT) {
 		if (pitchWidth >= 64 && pitchHeight >= 64) {
 			/*E YCbCr 4:2:0 or YCbCr 4:2:2 (fast, processed on dedicated hardware) */
 			ret = sceJpegMJpegCsc(
-				vram32, pYCbCr, ret, pitchWidth,
+				fb_addr, pYCbCr, ret, pitchWidth,
 				SCE_JPEG_PIXEL_RGBA8888, outputInfo.colorSpace & 0xFFFF);
 			if (ret < 0) {
 				printf("sceJpegMJpegCsc() 0x%08x\n", ret);
@@ -183,7 +193,7 @@ int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSi
 			/*E YCbCr 4:2:0 or YCbCr 4:2:2, image width < 64 or height < 64
 				(slow, processed on the CPU) */
 			ret = csc(
-				vram32, pYCbCr, ret, pitchWidth,
+				fb_addr, pYCbCr, ret, pitchWidth,
 				SCE_JPEG_PIXEL_RGBA8888, outputInfo.colorSpace & 0xFFFF);
 			if (ret < 0) {
 				printf("csc() 0x%08x\n", ret);
@@ -193,7 +203,7 @@ int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSi
 	} else {
 		/*E YCbCr 4:4:4 (slow, processed on the codec engine) */
 		ret = sceJpegCsc(
-			vram32, pYCbCr, ret, pitchWidth,
+			fb_addr, pYCbCr, ret, pitchWidth,
 			SCE_JPEG_PIXEL_RGBA8888, outputInfo.colorSpace & 0xFFFF);
 		if (ret < 0) {
 			printf("sceJpegCsc() 0x%08x\n", ret);
@@ -202,7 +212,11 @@ int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSi
 	}
 
 	/*E Display frame buffer */
+    drawSetFrameBuf(pParam);
+    printf("set draw frame");
+    drawPicture(0,0,pitchWidth,pitchHeight,fb_addr);
 
+    return 0;
 }
 
 int readFile(const char *fileName, unsigned char *pBuffer, SceSize bufSize)

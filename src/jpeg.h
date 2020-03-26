@@ -6,6 +6,7 @@
 #include <psp2/types.h>
 
 #define ROUND_UP(x, a)	((((unsigned int)x)+((a)-1u))&(~((a)-1u)))
+#define ALIGN(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 
 /*E frame buffer */
 #define DISP_FRAME_WIDTH		960

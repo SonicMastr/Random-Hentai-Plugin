@@ -69,4 +69,6 @@ SceInt drawSetFrameBuf(const SceDisplayFrameBuf *param);
 */
 SceVoid drawRect(SceUInt32 x, SceUInt32 y, SceUInt32 w, SceUInt32 h, SceUInt32 col);
 
+SceVoid drawPicture(SceUInt32 x, SceUInt32 y, SceUInt32 w, SceUInt32 h, void *pFrame);
+
 #endif

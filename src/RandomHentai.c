@@ -42,12 +42,12 @@ int sceDisplaySetFrameBuf_hentaiTime(const SceDisplayFrameBuf *pParam, int sync)
 			printf("jpegdecDecode() 0x%08x\n", ret);
 		}
 		drawSetFrameBuf(pParam);
-  			drawString(0, 320, "Nice");
+  		drawString(0, 320, "Nice");
   		drawRect(250, 320, 40, 40, RGB_RED);
 		return TAI_CONTINUE(int, display_ref, pParam, sync);
   	}
-	while(1) {
-		printf("I had to do this Loop. Ignore this\n");
+	while (1) {
+		printf("Ingore this. I'm too lazy to add a proper delay");
 	}
 }
 

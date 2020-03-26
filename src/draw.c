@@ -1,7 +1,6 @@
-#include <libk/stdarg.h>
-#include <libk/stdio.h>
 #include <libk/string.h>
 
+#include <psp2/kernel/clib.h>
 #include <psp2/types.h>
 #include <psp2/display.h>
 
@@ -13,6 +12,7 @@ extern unsigned char msx[];
 
 static SceInt pwidth, pheight, bufferwidth, pixelformat;
 static SceSize *vram32;
+static SceUInt32 *photo;
 
 static SceUInt32 fcolor = 0x00ffffff;
 static SceUInt32 bcolor = 0xff000000;
@@ -224,6 +224,45 @@ SceVoid drawRect(SceUInt32 x, SceUInt32 y, SceUInt32 w, SceUInt32 h, SceUInt32 c
 			c2 = ((c2*alpha)>>8)&0x0000ff00;
 			SceUInt32 color = (in_col&0xffffff) + c1 + c2;
 			((SceUInt32 *)vram32)[(x + j) + (y + i) * bufferwidth] = color;
+		}
+	}
+}
+
+SceVoid drawPicture(SceUInt32 x, SceUInt32 y, SceUInt32 w, SceUInt32 h, void *pFrame)
+{
+	sceClibPrintf("drawing\n");
+	SceUInt32* c1,c2;
+	photo = (SceUInt32*)pFrame;
+	//c2 = photo[(x + 0) + (y + 0) * bufferwidth];
+	//c2 = photo[0+(h-1)*bufferwidth];
+	//SceUInt8* clr = (SceUInt8*)&c2;
+	//SceUInt8 r = clr[0];
+	//SceUInt8 g = clr[1];
+	//SceUInt8 b = clr[2];
+	//SceUInt8 a = clr[3];
+	//sceClibPrintf("This is this r:%d g:%d b:%d a:%d\n", r, g, b, a);
+	//SceUInt32 in_col = adjust_alpha(col);
+	//SceUInt32 alpha = in_col>>24;
+	
+	// for (SceInt i = 0; i < h; i++) 
+	// {
+	// 	for (SceInt j = 0; j < w; j++) 
+	// 	{
+	// 		c2 = vram32[(x + j) + (y + i) * bufferwidth];
+	// 		c1 = c2 & 0x00ff00ff;
+	// 		c2 = c2 & 0x0000ff00;
+	// 		c1 = ((c1*alpha)>>8)&0x00ff00ff;
+	// 		c2 = ((c2*alpha)>>8)&0x0000ff00;
+	// 		SceUInt32 color = (in_col&0xffffff) + c1 + c2;
+	// 		((SceUInt32 *)vram32)[(x + j) + (y + i) * bufferwidth] = color;
+	// 	}
+	// }
+
+	for (SceInt i = 0; i < h; i++)
+	{
+		for (SceInt j = 0; j < w; j++)
+		{
+			((SceUInt32 *)vram32)[(x + j) + (y + i) * bufferwidth] = ((SceUInt32 *)photo)[(x + j) + (y + i) * bufferwidth];
 		}
 	}
 }
