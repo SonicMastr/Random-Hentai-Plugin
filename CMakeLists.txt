@@ -41,8 +41,7 @@ target_link_libraries(${PROJECT_NAME}
   SceLibKernel_stub
   SceDisplay_stub
   SceSysmem_stub
-  SceIofilemgr_stub
-  SceGxm_stub
+  SceIofilemgr_stub 
   SceJpeg_stub
   k
   gcc

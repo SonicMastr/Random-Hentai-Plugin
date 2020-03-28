@@ -23,8 +23,14 @@
 #define DISP_DISPLAY_BUF_NUM	2
 #define DISP_DISPLAY_FLIP_INTERVAL	2
 
+typedef enum JpegDecStatus {
+	JPEG_DEC_DECODED,
+	JPEG_DEC_DECODING,
+	JPEG_DEC_NO_INIT,
+	JPEG_DEC_ERROR,
+} JpegDecStatus;
+
 typedef struct {
-	void	   *pFrame;
 	int			validWidth;
 	int			validHeight;
 	int			pitchWidth;
@@ -32,16 +38,17 @@ typedef struct {
 } JpegDispFrameInfo;
 
 typedef struct {
-	SceUID		eventFlag;
-	JpegDispFrameInfo  *frameInfo;
 	SceUID		bufferMemBlock;
-	SceUID		frameBufMemBlock;
+	SceDisplayFrameBuf *photoBuf;
 	void	   *pBuffer;
 	void	   *pFrameBuf;
 	SceSize		streamBufSize;
 	SceSize		decodeBufSize;
 	SceSize		coefBufSize;
+	JpegDispFrameInfo *photoBufInfo;
 } JpegDecCtrl;
+
+int jpegdecInit(JpegDecCtrl *pCtrl, SceDisplayFrameBuf *photoBuf, SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSize);
 
 int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSize, const char* fileName);
 

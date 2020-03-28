@@ -71,4 +71,6 @@ SceVoid drawRect(SceUInt32 x, SceUInt32 y, SceUInt32 w, SceUInt32 h, SceUInt32 c
 
 SceVoid drawPicture(SceUInt32 x, SceUInt32 y, SceUInt32 w, SceUInt32 h, void *pFrame);
 
+SceVoid drawPictureCenter(SceUInt32 w, SceUInt32 h, void *pFrame);
+
 #endif

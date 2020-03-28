@@ -14,6 +14,48 @@
 
 static SceUID fb_uid = -1;
 
+int jpegdecInit(JpegDecCtrl *pCtrl, SceDisplayFrameBuf *photoBuf, SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSize)
+{
+	int ret = 0;
+	SceSize totalBufSize;
+	SceJpegMJpegInitParam initParam;
+    SceKernelMemBlockType memBlockType = SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW;
+	SceSize memBlockAlign = 256 * 1024;
+	/*E Allocate buffers for JPEG decoder. */
+	streamBufSize = ROUND_UP(streamBufSize, 256);
+	decodeBufSize = ROUND_UP(decodeBufSize, 256);
+	coefBufSize = ROUND_UP(coefBufSize, 256);
+	totalBufSize = ROUND_UP(streamBufSize + decodeBufSize + coefBufSize, memBlockAlign);
+
+	pCtrl->bufferMemBlock = sceKernelAllocMemBlock("jpegdecBuffer",
+		memBlockType, totalBufSize, SCE_NULL);
+	if (pCtrl->bufferMemBlock < 0) {
+		printf("sceKernelAllocMemBlock() 0x%08x\n", pCtrl->bufferMemBlock);
+		return pCtrl->bufferMemBlock;
+	}
+	ret = sceKernelGetMemBlockBase(pCtrl->bufferMemBlock, &pCtrl->pBuffer);
+	if (ret < 0) {
+		printf("sceKernelGetMemBlockBase() 0x%08x\n", ret);
+		return ret;
+	}
+
+	/* Initialize JPEG decoder. */
+	initParam.size				= sizeof(SceJpegMJpegInitParam);
+	initParam.maxSplitDecoder	= 0;
+	initParam.option			= SCE_JPEG_MJPEG_INIT_OPTION_NONE;
+	ret = sceJpegInitMJpegWithParam(&initParam);
+	if (ret < 0) {
+		printf("sceJpegInitMJpegWithParam() 0x%08x\n", ret);
+		return ret;
+	}
+
+	pCtrl->photoBuf = photoBuf;
+	pCtrl->streamBufSize = streamBufSize;
+	pCtrl->decodeBufSize = decodeBufSize;
+	pCtrl->coefBufSize = coefBufSize;
+	return ret;
+}
+
 int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSize, const char* fileName)
 {
     int ret = 0;
@@ -37,6 +79,7 @@ int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSi
 
     streamBufSize = ROUND_UP(streamBufSize, 256);
 	decodeBufSize = ROUND_UP(decodeBufSize, 256);
+	coefBufSize = ROUND_UP(coefBufSize, 256);
 	totalBufSize = ROUND_UP(streamBufSize + decodeBufSize + coefBufSize, memBlockAlign);
 
     bufferMemBlock = sceKernelAllocMemBlock("jpegdecBuffer",
@@ -104,9 +147,9 @@ int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSi
 		downScale = (downScaleWidth >= downScaleHeight)? downScaleWidth: downScaleHeight;
 		if (downScale <= 1.f) {
 			/*E Downscale is not needed. */
-		} else if (downScale <= 2.f) {
+		} else if (downScale <= 3.f) {
 			decodeMode |= SCE_JPEG_MJPEG_DOWNSCALE_1_2;
-		} else if (downScale <= 4.f) {
+		} else if (downScale <= 6.f) {
 			decodeMode |= SCE_JPEG_MJPEG_DOWNSCALE_1_4;
 		} else if (downScale <= 8.f) {
 			decodeMode |= SCE_JPEG_MJPEG_DOWNSCALE_1_8;
@@ -214,7 +257,7 @@ int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSi
 	/*E Display frame buffer */
     drawSetFrameBuf(pParam);
     printf("set draw frame");
-    drawPicture(0,0,pitchWidth,pitchHeight,fb_addr);
+    drawPictureCenter(pitchWidth,pitchHeight,fb_addr);
 
     return 0;
 }
