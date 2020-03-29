@@ -208,7 +208,7 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
 		/*E draw the texture */
 		void *vertex_wvp_buffer;
 		ret = sceGxmReserveVertexDefaultUniformBuffer(context, &vertex_wvp_buffer);
-		printf("Reserver Uniform Data output: %d\n", ret);
+		printf("Reserved Uniform Data output: %d\n", ret);
 		ret = sceGxmSetUniformDataF(vertex_wvp_buffer, wvp, 0, 16, orthographic);
 		printf("Uniform Data output: %d\n", ret);
 		ret = sceGxmSetFragmentTexture(context, 0, &texture);
