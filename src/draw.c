@@ -2,6 +2,8 @@
 #include <psp2/types.h>
 #include <psp2/display.h>
 
+#include <psp2/paf.h>
+
 #include <string.h>
 
 #include "draw.h"
@@ -243,17 +245,17 @@ SceVoid drawPicture(SceUInt32 x, SceUInt32 y, SceUInt32 w, SceUInt32 h, void *pF
 
 		/* Don't yell at me. Adding this to the for loop conditions causes the entire loop to not run */
 		if (y+i < pheight) {
-		 	memcpy(&vram32[x + (y + i) * bufferwidth], &photo[i * w], sizeof(photo[0]) * min(w, bufferwidth - x));
+		 	sceClibMemcpy(&vram32[x + (y + i) * bufferwidth], &photo[i * w], sizeof(photo[0]) * min(w, bufferwidth - x));
 		}
 		
-		/* for (SceInt j = 0; j < w; j++)
-		{
-			if (x+j < 960) {
-				if (y+i < 544) {
-					((SceUInt32 *)vram32)[(x + j) + (y + i) * bufferwidth] = ((SceUInt32 *)photo)[j + i * w];
-				}
-			}
-		} */
+		//for (SceInt j = 0; j < w; j++)
+		//{
+		//	if (x+j < 960) {
+		//		if (y+i < 544) {
+		//			((SceUInt32 *)vram32)[(x + j) + (y + i) * bufferwidth] = ((SceUInt32 *)photo)[j + i * w];
+		//		}
+		//	}
+		//}
 	}
 }
 
@@ -266,3 +268,5 @@ SceVoid drawPictureCenter(SceUInt32 w, SceUInt32 h, void *pFrame)
 	SceUInt y = (pheight / 2) - (h / 2);
 	return drawPicture(x, y, w, h, pFrame);
 }
+
+

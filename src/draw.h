@@ -2,6 +2,8 @@
 #define __DRAW_H__
 
 #include <psp2/display.h>
+#include <psp2/gxm.h>
+#include <jpeg.h>
 
 #define CYAN        0x00FFFF00
 #define MAGENTA     0x00FF00FF

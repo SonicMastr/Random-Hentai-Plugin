@@ -22,11 +22,54 @@ link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+set(VERTEX_SHADERS
+	texture_v.cg
+)
+
+set(FRAGMENT_SHADERS
+  texture_f.cg
+)
+
+foreach(shader ${VERTEX_SHADERS})
+	get_filename_component(shader_we ${shader} NAME_WE)
+	add_custom_command(OUTPUT "${shader_we}.gxp"
+		COMMAND $ENV{PSP2CGC} -profile sce_vp_psp2 "${PROJECT_SOURCE_DIR}/${shader}"
+			-o "${CMAKE_BINARY_DIR}/${shader_we}.gxp"
+		DEPENDS ${shader}
+		COMMENT "Compiling ${shader} to ${shader_we}.gxp"
+	)
+	list(APPEND SHADER_GXPS "${shader_we}.gxp")
+endforeach()
+
+foreach(shader ${FRAGMENT_SHADERS})
+	get_filename_component(shader_we ${shader} NAME_WE)
+	add_custom_command(OUTPUT "${shader_we}.gxp"
+		COMMAND $ENV{PSP2CGC} -profile sce_fp_psp2 "${PROJECT_SOURCE_DIR}/${shader}"
+			-o "${CMAKE_BINARY_DIR}/${shader_we}.gxp"
+		DEPENDS ${shader}
+		COMMENT "Compiling ${shader} to ${shader_we}.gxp"
+	)
+	list(APPEND SHADER_GXPS "${shader_we}.gxp")
+endforeach()
+
+foreach(gxp ${SHADER_GXPS})
+	get_filename_component(gxp_we ${gxp} NAME_WE)
+	add_custom_command(OUTPUT "${gxp_we}_gxp.o"
+		COMMAND arm-vita-eabi-objcopy --input-target binary --output-target elf32-littlearm
+			--binary-architecture arm "${gxp}"
+			"${CMAKE_BINARY_DIR}/${gxp_we}_gxp.o"
+		WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+		DEPENDS ${gxp}
+		COMMENT "Objcopying ${gxp} to ${gxp_we}_gxp.o"
+	)
+	list(APPEND SHADER_OBJECTS "${gxp_we}_gxp.o")
+endforeach()
 if (NOT ${RELEASE})
   add_definitions(-DENABLE_LOGGING)
 endif()
 
 add_executable(${PROJECT_NAME}
+  ${SHADER_OBJECTS}
   src/RandomHentai.c
   src/draw.c
   src/jpeg.c
@@ -38,10 +81,11 @@ add_executable(${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME}
   taihen_stub
-  SceLibKernel_stub
-  SceDisplay_stub
+  SceLibKernel_stub_weak
+  SceGxm_stub_weak
+  SceDisplay_stub_weak
   SceSysmem_stub
-  SceIofilemgr_stub 
+  SceIofilemgr_stub_weak
   SceJpeg_stub
   k
   gcc

@@ -4,7 +4,9 @@
 #include <psp2/kernel/sysmem.h>
 #include <psp2/display.h>
 #include <psp2/types.h>
+#include <psp2/kernel/clib.h>
 
+#define printf sceClibPrintf
 #define ROUND_UP(x, a)	((((unsigned int)x)+((a)-1u))&(~((a)-1u)))
 #define ALIGN(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 
@@ -24,6 +26,7 @@
 #define DISP_DISPLAY_FLIP_INTERVAL	2
 
 typedef enum JpegDecStatus {
+	JPEG_DEC_IDLE,
 	JPEG_DEC_DECODED,
 	JPEG_DEC_DECODING,
 	JPEG_DEC_NO_INIT,
@@ -39,17 +42,19 @@ typedef struct {
 
 typedef struct {
 	SceUID		bufferMemBlock;
-	SceDisplayFrameBuf *photoBuf;
 	void	   *pBuffer;
 	void	   *pFrameBuf;
+	int			validHeight;
+	int			validWidth;
 	SceSize		streamBufSize;
 	SceSize		decodeBufSize;
 	SceSize		coefBufSize;
+	SceDisplayFrameBuf *photoBuf;
 	JpegDispFrameInfo *photoBufInfo;
 } JpegDecCtrl;
 
 int jpegdecInit(JpegDecCtrl *pCtrl, SceDisplayFrameBuf *photoBuf, SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSize);
 
-int jpegdecDecode(const SceDisplayFrameBuf *pParam, SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSize, const char* fileName);
+int jpegdecDecode(JpegDecCtrl *pCtrl, const SceDisplayFrameBuf *pParam, const char* fileName);
 
 #endif
