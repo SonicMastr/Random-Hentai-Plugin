@@ -57,4 +57,6 @@ int jpegdecInit(JpegDecCtrl *pCtrl, SceDisplayFrameBuf *photoBuf, SceSize stream
 
 int jpegdecDecode(JpegDecCtrl *pCtrl, const SceDisplayFrameBuf *pParam, const char* fileName);
 
+int jpegdecTerm(JpegDecCtrl *pCtrl);
+
 #endif

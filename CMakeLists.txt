@@ -73,6 +73,7 @@ add_executable(${PROJECT_NAME}
   src/RandomHentai.c
   src/draw.c
   src/jpeg.c
+  src/math_utils.c
   #src/jpegdec.c
   src/csc.c
   src/font.c
@@ -81,12 +82,13 @@ add_executable(${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME}
   taihen_stub
-  SceLibKernel_stub_weak
-  SceGxm_stub_weak
-  SceDisplay_stub_weak
+  SceLibKernel_stub
+  SceGxm_stub
+  SceDisplay_stub
   SceSysmem_stub
-  SceIofilemgr_stub_weak
+  SceIofilemgr_stub
   SceJpeg_stub
+  m
   k
   gcc
 )

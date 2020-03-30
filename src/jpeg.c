@@ -264,3 +264,19 @@ int jpegdecDecode(JpegDecCtrl *pCtrl, const SceDisplayFrameBuf *pParam, const ch
 
     return 0;
 }
+
+int jpegdecTerm(JpegDecCtrl *pCtrl)
+{
+	int ret;
+
+	ret = sceJpegFinishMJpeg();
+	if (pCtrl->bufferMemBlock >= 0) {
+		ret |= sceKernelFreeMemBlock(pCtrl->bufferMemBlock);
+		pCtrl->bufferMemBlock = ((SceUID) 0xFFFFFFFF);
+	}
+	//if (pCtrl->eventFlag >= 0) {
+	//	ret |= sceKernelDeleteEventFlag(pCtrl->eventFlag);
+	//	pCtrl->eventFlag = SCE_UID_INVALID_UID;
+	//}
+	return ret;
+}
