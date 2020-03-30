@@ -66,7 +66,7 @@ static const SceGxmProgramParameter *paramColorAttribute = NULL;
 static const SceGxmProgramParameter *wvp = NULL;
 static VertexV32T32 *vertices = NULL;
 static SceUInt16	*indices = NULL;
-//float			ratioX, ratioY, minX, minY, maxX, maxY;
+float			ratioX, ratioY, minX, minY, maxX, maxY;
 static matrix4x4 mvp;
 
 void delay(int seconds){
