@@ -218,8 +218,10 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
 				SCE_GXM_TEXTURE_FORMAT_A8B8G8R8,
 				s_decCtrl.validWidth, s_decCtrl.validHeight, photoBuf.width * 4);
 			printf("Texture Init output: 0x%08x\n", ret);
+
 			ret = sceGxmTextureSetMagFilter(&texture, SCE_GXM_TEXTURE_FILTER_LINEAR);
 			printf("Mag Filter output: 0x%08x\n", ret);
+
 			printf("True\n");
 		} else {
 				sceGxmTextureInitLinear(&texture, photoBuf.base,
@@ -247,17 +249,24 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
 
 		/*E draw the texture */
 		void *vertex_wvp_buffer;
+
 		ret = sceGxmReserveVertexDefaultUniformBuffer(context, &vertex_wvp_buffer);
 		printf("Reserved Uniform Data output: %d\n", ret);
+
 		ret = sceGxmSetUniformDataF(vertex_wvp_buffer, wvp, 0, 16, (const float*)mvp);
 		printf("Uniform Data output: %d\n", ret);
+
 		ret = sceGxmSetFragmentTexture(context, 0, &texture);
 		printf("Fragment Texture output: %d\n", ret);
+
 		ret = sceGxmSetVertexStream(context, 0, vertices);
 		printf("Vertex Stream output: %d\n", ret);
+
 		printf("Starting to Draw\n");
+
 		ret = sceGxmDraw(context, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices, 4);
 		printf("GxmDraw Output: %d\n", ret);
+
 		printf("Finished Drawing\n");
 	}
 	return TAI_CONTINUE(int, hook_refs[1], context, vertexNotification, fragmentNotification);
@@ -271,10 +280,11 @@ int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params
 	int ret = TAI_CONTINUE(int, hook_refs[2], params, shaderPatcher);
 	// Grabbing a reference to used shader patcher
 	patcher = *shaderPatcher;
-
 	printf("Aquired Shader Patcher\n");
+
 	res = sceGxmShaderPatcherRegisterProgram(patcher, textureVertexProgramGxp, &vertexProgramId);
 	printf("Shader Patcher Register Vertex Out: 0x%08x\n", ret);
+
 	res = sceGxmShaderPatcherRegisterProgram(patcher, textureFragmentProgramGxp, &fragmentProgramId);
 	printf("Shader Patcher Register Fragment Out: 0x%08x\n", ret);
 
@@ -284,16 +294,19 @@ int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params
 	if (paramPositionAttribute == NULL) {
 		printf("Couldn't Find Position Attribute!");
 	}
+
 	paramColorAttribute = sceGxmProgramFindParameterByName(textureVertexProgramGxp, "aTexcoord");
 	if (paramColorAttribute == NULL) {
 		printf("Couldn't Find Texture Attribute!");
 	}
+
 	wvp = sceGxmProgramFindParameterByName(textureVertexProgramGxp, "wvp");
 	if (wvp == NULL) {
 		printf("Couldn't Find WVP!");
 	}
 
 	printf("Aquired Atrributes\n");
+
 	SceGxmVertexAttribute vertexAttributes[2];
 	SceGxmVertexStream vertexStream[1];
 	vertexAttributes[0].streamIndex = 0;
