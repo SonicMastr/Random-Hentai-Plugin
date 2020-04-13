@@ -300,7 +300,7 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
         vertices[0].y = minY;
         vertices[0].z = 1.0f;
         vertices[0].u = 0.0f;
-        vertices[0].v = 1.0f;
+        vertices[0].v = 0.0f;
 
         vertices[1].x = maxX;
         vertices[1].y = minY;
