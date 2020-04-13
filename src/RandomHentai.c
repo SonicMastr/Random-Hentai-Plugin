@@ -82,40 +82,6 @@ void* gpu_alloc_map(SceKernelMemBlockType type, SceGxmMemoryAttribFlags gpu_attr
 	return addr;
 }
 
-void *graphicsAlloc(SceKernelMemBlockType type, unsigned int size, unsigned int alignment, unsigned int attribs, SceUID *uid)
-{
-	int ret = 0;
-	void *mem = NULL;
-
-	(void)ret;
-
-	/*E page align the size */
-	if (type == SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW) {
-		/*E CDRAM memblocks must be 256KiB aligned */
-		size = ALIGN(size, 256 * 1024);
-	} else {
-		/*E LPDDR memblocks must be 4KiB aligned */
-		size = ALIGN(size, 4 * 1024);
-	}
-
-	*uid = sceKernelAllocMemBlock("vdispGraphics", type, size, NULL);
-	if (ret < 0) {
-		printf("sceKernelAllocMemBlock() failed\n");
-	}
-
-	ret = sceKernelGetMemBlockBase(*uid, &mem);
-	if (ret != 0) {
-		printf("sceKernelGetMemBlockBase() failed, ret 0x%x\n", ret);
-	}
-
-	ret = sceGxmMapMemory(mem, size, attribs);
-	if (ret != 0) {
-		printf("sceGxmMapMemory() failed, ret 0x%x\n", ret);
-	}
-
-	return mem;
-}
-
 void graphicsFree(SceUID uid)
 {
 	int ret = 0;
