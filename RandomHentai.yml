@@ -5,4 +5,5 @@ RandomHentai:
         minor: 0
     main:
         start: module_start
+        stop: module_stop
     

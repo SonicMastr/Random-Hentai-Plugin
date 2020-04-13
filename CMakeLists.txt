@@ -15,7 +15,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q -Wall -O3 -std=gnu99")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fno-rtti -fno-exceptions")
 
 include_directories(
-  src
+  include
 )
 
 link_directories(
@@ -71,24 +71,17 @@ endif()
 add_executable(${PROJECT_NAME}
   ${SHADER_OBJECTS}
   src/RandomHentai.c
-  src/draw.c
   src/jpeg.c
-  src/math_utils.c
-  #src/jpegdec.c
-  src/csc.c
-  src/font.c
-  src/draw.c
 )
 
 target_link_libraries(${PROJECT_NAME}
   taihen_stub
-  SceLibKernel_stub
-  SceGxm_stub
-  SceDisplay_stub
-  SceSysmem_stub
-  SceIofilemgr_stub
   SceJpeg_stub
-  m
+  SceLibKernel_stub
+  SceDisplay_stub
+  SceIofilemgr_stub
+  SceGxm_stub
+  SceSysmem_stub
   k
   gcc
 )
