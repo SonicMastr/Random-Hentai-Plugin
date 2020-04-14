@@ -211,9 +211,9 @@ int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params
 		&fragmentProgram);
 	printf("Patcher Create Fragment Out: 0x%08x\n", res);
 
-	vertices = gpu_alloc_map(SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, SCE_GXM_MEMORY_ATTRIB_READ, 4 * sizeof(VertexV32T32), &verticesUid);
+	vertices = gpu_alloc_map(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, SCE_GXM_MEMORY_ATTRIB_READ, 4 * sizeof(VertexV32T32), &verticesUid);
 
-	indices = gpu_alloc_map(SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, SCE_GXM_MEMORY_ATTRIB_READ, 4 * sizeof(unsigned short), &indicesUid);
+	indices = gpu_alloc_map(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, SCE_GXM_MEMORY_ATTRIB_READ, 4 * sizeof(unsigned short), &indicesUid);
 
 	int i;
 	for (i=0;i<4;i++){
@@ -223,6 +223,7 @@ int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params
 	matrix_init_orthographic(_vita2d_ortho_matrix, 0.0f, 960, 544, 0.0f, 0.0f, 1.0f);
 
 	printf("Initialized Verteces and Indices\n");
+	rh_JPEG_decoder_initialize();
 	status = JPEG_DEC_DECODING;
 
 	return ret;
@@ -236,10 +237,12 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
         texture = rh_load_JPEG_file(FILENAME);
         if (texture == NULL) {
             printf("Error Decoding Texture\n");
+			rh_JPEG_decoder_finish();
             status = JPEG_DEC_ERROR;
             goto skip;
         }
         printf("Decoded Texture\n");
+		rh_JPEG_decoder_finish();
         status = JPEG_DEC_DECODED;
     }
     if (status == JPEG_DEC_DECODED) {
@@ -323,8 +326,6 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
 void _start() __attribute__ ((weak, alias ("module_start")));
 
 int module_start(SceSize argc, const void *args) {
-
-    rh_JPEG_decoder_initialize();
     status = JPEG_DEC_IDLE;
 
 	hookFunction(0x05032658, sceGxmShaderPatcherCreate_hentaiTime);
@@ -336,6 +337,7 @@ int module_start(SceSize argc, const void *args) {
 int module_stop(SceSize argc, const void *args) {
 
 	rh_JPEG_decoder_finish();
+	status = JPEG_DEC_NO_INIT;
 	if (vertices) {
 		graphicsFree(verticesUid);
 	}

@@ -15,7 +15,7 @@
 #define MAX_IMAGE_WIDTH		960
 #define MAX_IMAGE_HEIGHT	544
 #define MAX_IMAGE_BUF_SIZE	(MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT * 3 / 2)
-#define MAX_JPEG_BUF_SIZE	(MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT * 2)
+#define MAX_JPEG_BUF_SIZE	(MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT)
 #define MAX_COEF_BUF_SIZE	0
 /*#define MAX_COEF_BUF_SIZE	(MAX_IMAGE_BUF_SIZE * 2 + 256)*/
 
@@ -395,7 +395,15 @@ int readFile(const char *fileName, unsigned char *pBuffer, SceSize bufSize)
 
 	ret = sceIoGetstat(fileName, &stat);
 	fd = sceIoOpen(fileName, SCE_O_RDONLY, 0);
+	if (fd < 0) {
+		printf("sceIoOpen(%s) 0x%08x\n", fileName, ret);
+		return -1;
+	}
 	remainSize = (SceSize)stat.st_size;
+	if (stat.st_size > bufSize) {
+		printf("file too large (bufSize %d byte)\n", bufSize);
+		return -1;
+	}
 	while (remainSize > 0) {
 		ret = sceIoRead(fd, pBuffer, remainSize);
 		pBuffer += ret;
@@ -410,8 +418,9 @@ int jpegdecInit(SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSiz
 {
 	SceJpegMJpegInitParam initParam;
 
-	SceKernelMemBlockType memBlockType = SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW;
-	SceSize memBlockAlign = 256 * 1024;
+	SceKernelMemBlockType memBlockType = SCE_KERNEL_MEMBLOCK_TYPE_USER_CDLG_RW_UNCACHE;
+	SceSize memBlockAlign = 1024 * 1024;
+
  
 	streamBufSize = ROUND_UP(streamBufSize, 256);
 	decodeBufSize = ROUND_UP(decodeBufSize, 256);
@@ -420,9 +429,10 @@ int jpegdecInit(SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSiz
 
 	s_decCtrl.bufferMemBlock = sceKernelAllocMemBlock("jpegdecBuffer",
 		memBlockType, totalBufSize, NULL);
+		
 	if (s_decCtrl.bufferMemBlock < 0) {
 		printf("sceKernelAllocMemBlock() 0x%08x\n", s_decCtrl.bufferMemBlock);
-		return -1;
+		return s_decCtrl.bufferMemBlock;
 	}
 
 	int ret = sceKernelGetMemBlockBase(s_decCtrl.bufferMemBlock, &s_decCtrl.pBuffer);
@@ -434,7 +444,7 @@ int jpegdecInit(SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSiz
 	/*E Initialize JPEG decoder. */
 	initParam.size = sizeof(SceJpegMJpegInitParam);
 	initParam.maxSplitDecoder = 0;
-	initParam.option = SCE_JPEG_MJPEG_INIT_OPTION_NONE;
+	initParam.option = SCE_JPEG_MJPEG_INIT_OPTION_LPDDR2_MEMORY;
 	sceJpegInitMJpegWithParam(&initParam);
 
 	s_decCtrl.streamBufSize = streamBufSize;
@@ -460,7 +470,7 @@ void rh_JPEG_decoder_initialize(void)
 {
 	int ret = jpegdecInit(MAX_JPEG_BUF_SIZE, MAX_IMAGE_BUF_SIZE, MAX_COEF_BUF_SIZE);
 	if (ret != 0) {
-		printf("Failed to init JPEG Decoder");
+		printf("Failed to init JPEG Decoder\n");
 	}
 }
 
@@ -483,8 +493,11 @@ Jpeg_texture *rh_load_JPEG_file(const char *filename)
 	printf("Reading File\n");
 	/*E Read JPEG file to buffer. */
 	ret = readFile(filename, pJpeg, s_decCtrl.streamBufSize);
+	if (ret < 0) {
+		return NULL;
+	}
 	isize = ret;
-	printf("Loaded File\n");
+	printf("Loaded File of Size %d Bytes\n", isize);
 
 	printf("Getting JPEG File Information\n");
 	/*E Get JPEG output information. */
@@ -591,7 +604,7 @@ Jpeg_texture *rh_load_JPEG_file(const char *filename)
 	unsigned int size = ROUND_UP(4 * 1024 * pFrameInfo.pitchHeight, 1024 * 1024);
 
 	printf("Allocating Texture Memory\n");
-	SceUID tex_data_uid = sceKernelAllocMemBlock("gpu_mem", SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, size, NULL);
+	SceUID tex_data_uid = sceKernelAllocMemBlock("gpu_mem", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, size, NULL);
 
 	void* texture_data;
 	printf("Checking Texture Memory Base\n");
