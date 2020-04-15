@@ -1,19 +1,20 @@
 #include <stdio.h>
 #include <taihen.h>
 #include <vitasdk.h>
+#include <psp2kern/kernel/sysmem.h>
 
 #include "jpeg.h"
 
 #define FILENAME			"ux0:/data/randomhentai/saved/51418.jpg"
 
-#define HOOKS_NUM 2
+#define HOOKS_NUM 4
 
 static uint8_t current_hook;
 static SceUID hooks[HOOKS_NUM];
 static tai_hook_ref_t hook_refs[HOOKS_NUM];
 
 // Set Decoder Status
-JpegDecStatus status = JPEG_DEC_NO_INIT;
+JpegDecStatus status;
 Jpeg_texture *texture;
 
 // Define Vertex Values
@@ -105,6 +106,22 @@ void graphicsFree(SceUID uid)
 	}
 }
 
+void freeJpegTexture(void) {
+	if (texture) {
+		if (texture->gxm_rtgt) {
+			sceGxmDestroyRenderTarget(texture->gxm_rtgt);
+		}
+		if(texture->depth_UID) {
+			graphicsFree(texture->depth_UID);
+		}
+		if(texture->palette_UID) {
+			graphicsFree(texture->palette_UID);
+		}
+		graphicsFree(texture->data_UID);
+		graphicsFree(texture->textureUID);
+	}
+}
+
 void matrix_init_orthographic(float *m, float left, float right, float bottom, float top, float near, float far)
 {
 	m[0x0] = 2.0f/(right-left);
@@ -130,6 +147,7 @@ void matrix_init_orthographic(float *m, float left, float right, float bottom, f
 
 int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params, SceGxmShaderPatcher **shaderPatcher)
 {
+	status = JPEG_DEC_IDLE;
 	int res;
 	printf("Starting Shader Patcher Patch\n");
 
@@ -210,6 +228,19 @@ int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params
 		textureVertexProgramGxp,
 		&fragmentProgram);
 	printf("Patcher Create Fragment Out: 0x%08x\n", res);
+
+	if (vertices) {
+		graphicsFree(verticesUid);
+		printf("Freed Vertices\n");
+	}
+	if (indices) {
+		graphicsFree(indicesUid);
+		printf("Freed Indices\n");
+	}
+	if (texture) {
+		freeJpegTexture();
+		printf("Freed Texture\n");
+	}
 
 	vertices = gpu_alloc_map(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, SCE_GXM_MEMORY_ATTRIB_READ, 4 * sizeof(VertexV32T32), &verticesUid);
 
@@ -323,15 +354,41 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
 	return ret;
 }
 
+int sceNpTrophySetupDialogInit_hentaiTime(void *opt) {
+	int ret;
+	printf("TrophySetupDialog Started!\n");
+	if (texture) {
+		freeJpegTexture();
+		printf("Freed Texture\n");
+		status = JPEG_DEC_NO_INIT;
+	}
+	ret = TAI_CONTINUE(int, hook_refs[2], opt);
+	return ret;
+}
+
+int sceNpTrophySetupDialogTerm_hentaiTime() {
+	printf("TrophySetupDialog Terminated!\n");
+	int ret = TAI_CONTINUE(int, hook_refs[3]);
+	if (ret == 0 && (status == JPEG_DEC_NO_INIT || status == JPEG_DEC_ERROR)) {
+		rh_JPEG_decoder_initialize();
+		status = JPEG_DEC_DECODING;
+	}
+	return ret;
+}
+
+
 void _start() __attribute__ ((weak, alias ("module_start")));
 
 int module_start(SceSize argc, const void *args) {
-    status = JPEG_DEC_IDLE;
 
 	hookFunction(0x05032658, sceGxmShaderPatcherCreate_hentaiTime);
 	printf("Initialized Hook 0\n");
 	hookFunction(0xFE300E2F, sceGxmEndScene_hentaiTime);
 	printf("Initialized Hook 1\n");			
+	hookFunction(0x9E2C02C9, sceNpTrophySetupDialogInit_hentaiTime);
+	printf("Initialized Hook 2\n");
+	hookFunction(0xA81082DD, sceNpTrophySetupDialogTerm_hentaiTime);
+	printf("Initialized Hook 3\n");
 	return SCE_KERNEL_START_SUCCESS;
 }
 int module_stop(SceSize argc, const void *args) {

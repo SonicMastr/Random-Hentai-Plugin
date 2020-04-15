@@ -451,6 +451,8 @@ int jpegdecInit(SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSiz
 	s_decCtrl.decodeBufSize = decodeBufSize;
 	s_decCtrl.coefBufSize = coefBufSize;
 
+	printf("Initialized Jpeg Decoder\n");
+
 	return 0;
 }
 
@@ -604,7 +606,7 @@ Jpeg_texture *rh_load_JPEG_file(const char *filename)
 	unsigned int size = ROUND_UP(4 * 1024 * pFrameInfo.pitchHeight, 1024 * 1024);
 
 	printf("Allocating Texture Memory\n");
-	SceUID tex_data_uid = sceKernelAllocMemBlock("gpu_mem", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, size, NULL);
+	SceUID tex_data_uid = sceKernelAllocMemBlock("gpu_mem", SCE_KERNEL_MEMBLOCK_TYPE_USER_CDLG_RW_UNCACHE, size, NULL);
 
 	void* texture_data;
 	printf("Checking Texture Memory Base\n");
@@ -656,6 +658,7 @@ Jpeg_texture *rh_load_JPEG_file(const char *filename)
 
 	printf("Set Texture Data UID\n");
 	texture->data_UID = tex_data_uid;
+	texture->textureUID = textureUid;
 
 	texture->validHeight = validHeight;
 	texture->validWidth = validWidth;

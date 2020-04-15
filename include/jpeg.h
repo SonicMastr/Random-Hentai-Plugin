@@ -27,6 +27,7 @@ typedef struct Jpeg_texture {
 	SceGxmColorSurface gxm_sfc;
 	SceGxmDepthStencilSurface gxm_sfd;
 	SceUID depth_UID;
+	SceUID textureUID;
 	SceInt validHeight;
 	SceInt validWidth;
 } Jpeg_texture;
