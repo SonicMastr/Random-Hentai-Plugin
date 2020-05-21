@@ -82,6 +82,7 @@ target_link_libraries(${PROJECT_NAME}
   SceIofilemgr_stub
   SceGxm_stub
   SceSysmem_stub
+  SceAppMgr_stub
   k
   gcc
 )

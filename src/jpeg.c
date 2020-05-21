@@ -17,6 +17,7 @@
 #define MAX_IMAGE_BUF_SIZE	(MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT * 3 / 2)
 #define MAX_JPEG_BUF_SIZE	(MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT)
 #define MAX_COEF_BUF_SIZE	0
+
 /*#define MAX_COEF_BUF_SIZE	(MAX_IMAGE_BUF_SIZE * 2 + 256)*/
 
 #define VDISP_FRAME_WIDTH		960
@@ -33,6 +34,7 @@ extern void* gpu_alloc_map(SceKernelMemBlockType type, SceGxmMemoryAttribFlags g
 
 extern void* sceClibMspaceMalloc(void* space, unsigned int size);
 extern void sceClibMspaceFree(void* space, void* adress);
+
 
 void* mspace_internal;
 
@@ -418,7 +420,7 @@ int jpegdecInit(SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSiz
 {
 	SceJpegMJpegInitParam initParam;
 
-	SceKernelMemBlockType memBlockType = SCE_KERNEL_MEMBLOCK_TYPE_USER_CDLG_RW_UNCACHE;
+	SceKernelMemBlockType memBlockType = SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE;
 	SceSize memBlockAlign = 1024 * 1024;
 
  
@@ -440,12 +442,14 @@ int jpegdecInit(SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSiz
 		printf("sceKernelGetMemBlockBase() 0x%08x\n", ret);
 		return ret;
 	}
+	printf("sceKernelGetMemBlockBase() 0x%08x\n", ret);
 
 	/*E Initialize JPEG decoder. */
 	initParam.size = sizeof(SceJpegMJpegInitParam);
 	initParam.maxSplitDecoder = 0;
 	initParam.option = SCE_JPEG_MJPEG_INIT_OPTION_LPDDR2_MEMORY;
-	sceJpegInitMJpegWithParam(&initParam);
+	ret = sceJpegInitMJpegWithParam(&initParam);
+	printf("sceJpegInitMJpegWithParam() 0x%08x\n", ret);
 
 	s_decCtrl.streamBufSize = streamBufSize;
 	s_decCtrl.decodeBufSize = decodeBufSize;
@@ -606,7 +610,7 @@ Jpeg_texture *rh_load_JPEG_file(const char *filename)
 	unsigned int size = ROUND_UP(4 * 1024 * pFrameInfo.pitchHeight, 1024 * 1024);
 
 	printf("Allocating Texture Memory\n");
-	SceUID tex_data_uid = sceKernelAllocMemBlock("gpu_mem", SCE_KERNEL_MEMBLOCK_TYPE_USER_CDLG_RW_UNCACHE, size, NULL);
+	SceUID tex_data_uid = sceKernelAllocMemBlock("cdlg_mem", 0x0CA08060 /* SCE_KERNEL_MEMBLOCK_TYPE_USER_UNKNOWN_RW_UNCACHE  It's really part of CDIALOG memory, but seems to have a way smaller size*/, size, NULL);
 
 	void* texture_data;
 	printf("Checking Texture Memory Base\n");

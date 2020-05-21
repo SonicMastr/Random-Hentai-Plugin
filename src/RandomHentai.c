@@ -7,11 +7,14 @@
 
 #define FILENAME			"ux0:/data/randomhentai/saved/51418.jpg"
 
-#define HOOKS_NUM 4
+#define HOOKS_NUM 7
 
 static uint8_t current_hook;
 static SceUID hooks[HOOKS_NUM];
 static tai_hook_ref_t hook_refs[HOOKS_NUM];
+
+SceUID _sceSharedFbOpen(int a1, int sysver);
+int sceSharedFbGetInfo(SceUID shared_fb_id, SceSharedFbInfo *info);
 
 // Set Decoder Status
 JpegDecStatus status;
@@ -50,6 +53,10 @@ static VertexV32T32 *vertices = NULL;
 static SceUInt16	*indices = NULL;
 float			ratioX, ratioY, minX, minY, maxX, maxY;
 float _vita2d_ortho_matrix[4*4];
+
+int hentai_thread(SceSize args, void *argp) {
+
+}
 
 void hookFunction(uint32_t nid, const void *func){
 	hooks[current_hook] = taiHookFunctionImport(&hook_refs[current_hook],TAI_MAIN_MODULE,TAI_ANY_LIBRARY,nid,func);
@@ -147,8 +154,8 @@ void matrix_init_orthographic(float *m, float left, float right, float bottom, f
 
 int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params, SceGxmShaderPatcher **shaderPatcher)
 {
+
 	status = JPEG_DEC_IDLE;
-	int res;
 	printf("Starting Shader Patcher Patch\n");
 
 	int ret = TAI_CONTINUE(int, hook_refs[0], params, shaderPatcher);
@@ -157,7 +164,7 @@ int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params
 	patcher = *shaderPatcher;
 	printf("Aquired Shader Patcher: 0x%08x\n", ret);
 
-	res = sceGxmProgramCheck(textureVertexProgramGxp);
+	int res = sceGxmProgramCheck(textureVertexProgramGxp);
 	printf("Check Vertex: 0x%08x\n", res);
 	res = sceGxmProgramCheck(textureFragmentProgramGxp);;
 
@@ -263,6 +270,12 @@ int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params
 int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *vertexNotification, const SceGxmNotification *fragmentNotification)
 {	
 	int ret;
+
+	if (status == JPEG_DEC_DIAG_TERM) {
+		rh_JPEG_decoder_initialize();
+		status = JPEG_DEC_DECODING;
+	}
+
     if (status == JPEG_DEC_DECODING) {
         printf("Decoding Texture\n");
         texture = rh_load_JPEG_file(FILENAME);
@@ -322,15 +335,15 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
 
         printf("1: X:%f, Y:%f, Z:%f\n2: X:%f, Y:%f, Z:%f\n3: X:%f, Y:%f, Z:%f\n4: X:%f, Y:%f, Z:%f\n", vertices[0].x, vertices[0].y, vertices[0].z , vertices[1].x, vertices[1].y, vertices[1].z , vertices[2].x, vertices[2].y, vertices[2].z , vertices[3].x, vertices[3].y, vertices[3].z );
 
-		/*E set texture */
+		/* Set texture */
 		ret = sceGxmSetFragmentTexture(context, 0, &texture->gxm_tex);
         printf("Fragment Texture output: %d\n", ret);
 
-        /*E set texture shaders */
+        /* Set texture shaders */
         sceGxmSetVertexProgram(context, vertexProgram);
         sceGxmSetFragmentProgram(context, fragmentProgram);
 
-        /*E draw the texture */
+        /* Draw the texture */
 
         void *vertex_wvp_buffer;
 
@@ -343,11 +356,13 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
         ret = sceGxmSetVertexStream(context, 0, vertices);
         printf("Vertex Stream output: %d\n", ret);
 
-        printf("Starting to Draw\n");
-        ret = sceGxmDraw(context, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices, 4);
-        printf("GxmDraw Output: %d\n", ret);
+		if (status == JPEG_DEC_DECODED) {           // double check in case Dialog Runs
+			printf("Starting to Draw\n");
+        	ret = sceGxmDraw(context, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices, 4);
+        	printf("GxmDraw Output: %d\n", ret);
 
-        printf("Finished Drawing\n");
+        	printf("Finished Drawing\n");
+		}
     }
     skip:
 	ret = TAI_CONTINUE(int, hook_refs[1], context, vertexNotification, fragmentNotification);
@@ -355,24 +370,57 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
 }
 
 int sceNpTrophySetupDialogInit_hentaiTime(void *opt) {
-	int ret;
+	status = JPEG_DEC_NO_INIT;
 	printf("TrophySetupDialog Started!\n");
 	if (texture) {
 		freeJpegTexture();
 		printf("Freed Texture\n");
-		status = JPEG_DEC_NO_INIT;
 	}
-	ret = TAI_CONTINUE(int, hook_refs[2], opt);
-	return ret;
+	return TAI_CONTINUE(int, hook_refs[2], opt);
 }
 
 int sceNpTrophySetupDialogTerm_hentaiTime() {
 	printf("TrophySetupDialog Terminated!\n");
 	int ret = TAI_CONTINUE(int, hook_refs[3]);
-	if (ret == 0 && (status == JPEG_DEC_NO_INIT || status == JPEG_DEC_ERROR)) {
-		rh_JPEG_decoder_initialize();
-		status = JPEG_DEC_DECODING;
+	status = JPEG_DEC_DIAG_TERM;
+	return ret;
+}
+
+int sceImeDialogInit_hentaiTime(const SceImeDialogParam *param) {
+	status = JPEG_DEC_NO_INIT;
+	printf("ImeDialog Started!\n");
+	if (texture) {
+		freeJpegTexture();
+		printf("Freed Texture\n");
 	}
+	return TAI_CONTINUE(int, hook_refs[4], param);
+}
+
+int sceImeDialogTerm_hentaiTime() {
+	printf("ImeDialog Terminated!\n");
+	int ret = TAI_CONTINUE(int, hook_refs[5]);
+	status = JPEG_DEC_DIAG_TERM;
+	return ret;
+}
+
+int sceGxmInitialize_hentaiTime(const SceGxmInitializeParams *params) {
+
+	SceGxmInitializeParams initializeParams;
+
+	printf("GXM Init!");
+	printf("Old parameterBufferSize %d\n", params->parameterBufferSize);
+	sceClibMemset(&initializeParams, 0, sizeof(SceGxmInitializeParams));
+
+	initializeParams.flags = params->flags;
+	initializeParams.displayQueueMaxPendingCount = params->displayQueueMaxPendingCount;
+	initializeParams.displayQueueCallback = params->displayQueueCallback;
+	initializeParams.displayQueueCallbackDataSize = params->displayQueueCallbackDataSize;
+	initializeParams.parameterBufferSize = 6291456;
+	printf("New parameterBufferSize %d\n", initializeParams.parameterBufferSize);
+
+	int ret = TAI_CONTINUE(int, hook_refs[6], &initializeParams);
+	printf("Gxm Initialize Out: 0x%08x\n", ret);
+	
 	return ret;
 }
 
@@ -389,24 +437,39 @@ int module_start(SceSize argc, const void *args) {
 	printf("Initialized Hook 2\n");
 	hookFunction(0xA81082DD, sceNpTrophySetupDialogTerm_hentaiTime);
 	printf("Initialized Hook 3\n");
+	hookFunction(0x1E7043BF, sceImeDialogInit_hentaiTime);
+	printf("Initialized Hook 4\n");
+	hookFunction(0x838A3AF4, sceImeDialogTerm_hentaiTime);
+	printf("Initialized Hook 5\n");
+	hookFunction(0xB0F1E4EC, sceGxmInitialize_hentaiTime);
+	printf("Initialized Hook 6\n");
+
+	SceUID thid;
+	thid = sceKernelCreateThread("hentai_thread", hentai_thread, 0x10000100, 0x10000, 0, 0, NULL);
+
+	if (thid >= 0)
+		sceKernelStartThread(thid, 0, NULL); 
+	
 	return SCE_KERNEL_START_SUCCESS;
 }
 int module_stop(SceSize argc, const void *args) {
 
-	rh_JPEG_decoder_finish();
+	printf("Stopping");
 	status = JPEG_DEC_NO_INIT;
+	rh_JPEG_decoder_finish();
 	if (vertices) {
 		graphicsFree(verticesUid);
+		printf("Freed Vertices");
 	}
 	if (indices) {
 		graphicsFree(indicesUid);
+		printf("Freed Indices");
 	}
-	
-	// Freeing hooks
 
 	// Freeing hooks
 	while (current_hook-- > 0){
 		taiHookRelease(hooks[current_hook], hook_refs[current_hook]);
+		printf("Released Hook %d", current_hook);
 	}
 	
 	return SCE_KERNEL_STOP_SUCCESS;	

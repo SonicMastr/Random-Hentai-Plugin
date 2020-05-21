@@ -11,11 +11,37 @@
 #define ALIGN(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 #define printf sceClibPrintf
 
+typedef struct SceSharedFbInfo { // size is 0x58
+	void* base1;		// cdram base
+	int memsize;
+	void* base2;		// cdram base
+	int unk_0C;
+	void *unk_10;
+	int unk_14;
+	int unk_18;
+	int unk_1C;
+	int unk_20;
+	int unk_24;		// 960
+	int unk_28;		// 960
+	int unk_2C;		// 544
+	int unk_30;
+	int curbuf;
+	int unk_38;
+	int unk_3C;
+	int unk_40;
+	int unk_44;
+	int vsync;
+	int unk_4C;
+	int unk_50;
+	int unk_54;
+} SceSharedFbInfo;
+
 typedef enum JpegDecStatus {
 	JPEG_DEC_IDLE,
 	JPEG_DEC_DECODED,
 	JPEG_DEC_DECODING,
 	JPEG_DEC_NO_INIT,
+	JPEG_DEC_DIAG_TERM,
 	JPEG_DEC_ERROR,
 } JpegDecStatus;
 
