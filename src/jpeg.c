@@ -4,6 +4,7 @@
 #include <psp2/io/fcntl.h>
 #include <psp2/gxm.h>
 #include <psp2/jpeg.h>
+#include <psp2/display.h>
 #include "jpeg.h"
 #include <psp2/kernel/clib.h>
 #include <malloc.h>
@@ -14,9 +15,10 @@
 #define ROUND_UP(x, a)	((((unsigned int)x)+((a)-1u))&(~((a)-1u)))
 #define MAX_IMAGE_WIDTH		960
 #define MAX_IMAGE_HEIGHT	544
-#define MAX_IMAGE_BUF_SIZE	(MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT * 3 / 2)
-#define MAX_JPEG_BUF_SIZE	(MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT)
+#define MAX_IMAGE_BUF_SIZE	(MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT * 3)
+#define MAX_JPEG_BUF_SIZE	(MAX_IMAGE_WIDTH * MAX_IMAGE_HEIGHT * 2)
 #define MAX_COEF_BUF_SIZE	0
+#define JPEG_TOTAL_BUFF_SIZE 2097152 + 1024
 
 /*#define MAX_COEF_BUF_SIZE	(MAX_IMAGE_BUF_SIZE * 2 + 256)*/
 
@@ -33,7 +35,7 @@ extern void* sceClibMemset(void* s, int c, SceSize n);
 extern void* gpu_alloc_map(SceKernelMemBlockType type, SceGxmMemoryAttribFlags gpu_attrib, size_t size, SceUID *uid);
 
 extern void* sceClibMspaceMalloc(void* space, unsigned int size);
-extern void sceClibMspaceFree(void* space, void* adress);
+extern void sceClibMspaceFree(void* space, void* address);
 
 
 void* mspace_internal;
@@ -420,14 +422,36 @@ int jpegdecInit(SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSiz
 {
 	SceJpegMJpegInitParam initParam;
 
-	SceKernelMemBlockType memBlockType = SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE;
-	SceSize memBlockAlign = 1024 * 1024;
+	SceKernelFreeMemorySizeInfo meminfo;
+	meminfo.size = sizeof(meminfo);
 
+	// Defaults for Memory Allocation
+	SceKernelMemBlockType memBlockType = SCE_KERNEL_MEMBLOCK_TYPE_USER_MAIN_PHYCONT_NC_RW;
+	SceSize memBlockAlign = 1024 * 1024;
  
 	streamBufSize = ROUND_UP(streamBufSize, 256);
 	decodeBufSize = ROUND_UP(decodeBufSize, 256);
 	coefBufSize = ROUND_UP(coefBufSize, 256);
 	totalBufSize = ROUND_UP(streamBufSize + decodeBufSize + coefBufSize, memBlockAlign);
+
+	sceKernelGetFreeMemorySize(&meminfo);
+	if (meminfo.size_phycont >= JPEG_TOTAL_BUFF_SIZE) {
+		initParam.option = SCE_JPEG_MJPEG_INIT_OPTION_LPDDR2_MEMORY;
+		printf("Chose PHYCONT\n");
+	} else if (meminfo.size_cdram >= JPEG_TOTAL_BUFF_SIZE) {
+		memBlockType = SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW;
+		memBlockAlign = 256 * 1024;
+		initParam.option = SCE_JPEG_MJPEG_INIT_OPTION_NONE;
+		printf("Chose CDRAM\n");
+	} else if (meminfo.size_user >= JPEG_TOTAL_BUFF_SIZE) {
+		memBlockType = SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE;
+		initParam.option = SCE_JPEG_MJPEG_INIT_OPTION_LPDDR2_MEMORY;
+		printf("Chose USER\n");
+	} else {
+		printf("Not enough memory (2MB) to initialize Jpeg Decoder\nPHYCONT: %d\nCDRAM: %d\nUSER: %d\n", meminfo.size_phycont, meminfo.size_cdram, meminfo.size_user);
+		return -1;
+	}
+	printf("PHYCONT: %d\nCDRAM: %d\nUSER: %d\n", meminfo.size_phycont, meminfo.size_cdram, meminfo.size_user);
 
 	s_decCtrl.bufferMemBlock = sceKernelAllocMemBlock("jpegdecBuffer",
 		memBlockType, totalBufSize, NULL);
@@ -455,7 +479,7 @@ int jpegdecInit(SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSiz
 	s_decCtrl.decodeBufSize = decodeBufSize;
 	s_decCtrl.coefBufSize = coefBufSize;
 
-	printf("Initialized Jpeg Decoder\n");
+	printf("Initialized Jpeg Decoder with decode buffer size of %d bytes\ntotal buffer size of %d bytes\n", s_decCtrl.decodeBufSize, totalBufSize);
 
 	return 0;
 }
@@ -472,12 +496,13 @@ int jpegdecTerm(void)
 	return 0;
 }
 
-void rh_JPEG_decoder_initialize(void)
+int rh_JPEG_decoder_initialize(void)
 {
 	int ret = jpegdecInit(MAX_JPEG_BUF_SIZE, MAX_IMAGE_BUF_SIZE, MAX_COEF_BUF_SIZE);
 	if (ret != 0) {
 		printf("Failed to init JPEG Decoder\n");
 	}
+	return ret;
 }
 
 void rh_JPEG_decoder_finish(void)
@@ -485,7 +510,7 @@ void rh_JPEG_decoder_finish(void)
 	jpegdecTerm();
 }
 
-Jpeg_texture *rh_load_JPEG_file(const char *filename)
+Jpeg_texture *rh_load_JPEG_file(const char *filename, SceDisplayFrameBuf *bframe)
 {
 	int ret;
 	SceJpegOutputInfo outputInfo;
@@ -533,8 +558,8 @@ Jpeg_texture *rh_load_JPEG_file(const char *filename)
 		float downScaleWidth, downScaleHeight, downScale;
 		int downScaleDiv;
 
-		downScaleWidth = (float)outputInfo.pitch[0].x / VDISP_FRAME_WIDTH;
-		downScaleHeight = (float)outputInfo.pitch[0].y / VDISP_FRAME_HEIGHT;
+		downScaleWidth = (float)outputInfo.pitch[0].x / 960;
+		downScaleHeight = (float)outputInfo.pitch[0].y / 544;
 		downScale = (downScaleWidth >= downScaleHeight) ? downScaleWidth : downScaleHeight;
 		if (downScale <= 1.f) {
 			/*E Downscale is not needed. */
@@ -542,14 +567,14 @@ Jpeg_texture *rh_load_JPEG_file(const char *filename)
 		else if (downScale <= 2.f) {
 			decodeMode |= SCE_JPEG_MJPEG_DOWNSCALE_1_2;
 		}
-		else if (downScale <= 3.f) {
+		else if (downScale <= 4.f) {
 			decodeMode |= SCE_JPEG_MJPEG_DOWNSCALE_1_4;
 		}
 		else if (downScale <= 5.f) {
 			decodeMode |= SCE_JPEG_MJPEG_DOWNSCALE_1_8;
 		} else {
-			printf("Too big image size, can't downscale to %u x %u\n",
-				VDISP_FRAME_WIDTH, VDISP_FRAME_HEIGHT);
+			printf("Too big image size, can't downscale to at least %u x %u\n",
+				960, 544);
 			return NULL;
 		}
 		downScaleDiv = (decodeMode >> 3) & 0xe;
@@ -607,7 +632,7 @@ Jpeg_texture *rh_load_JPEG_file(const char *filename)
 
 	//return NULL;
 
-	unsigned int size = ROUND_UP(4 * 1024 * pFrameInfo.pitchHeight, 1024 * 1024);
+	unsigned int size = ROUND_UP(4 * 1024 * pFrameInfo.validHeight, 1024 * 1024);
 
 	printf("Allocating Texture Memory\n");
 	SceUID tex_data_uid = sceKernelAllocMemBlock("cdlg_mem", 0x0CA08060 /* SCE_KERNEL_MEMBLOCK_TYPE_USER_UNKNOWN_RW_UNCACHE  It's really part of CDIALOG memory, but seems to have a way smaller size*/, size, NULL);

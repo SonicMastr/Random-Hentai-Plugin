@@ -83,6 +83,11 @@ target_link_libraries(${PROJECT_NAME}
   SceGxm_stub
   SceSysmem_stub
   SceAppMgr_stub
+  SceProcessmgr_stub
+  SceCommonDialog_stub
+  SceCtrl_stub
+  SceRtc_stub
+  SceKernelThreadMgr_stub
   k
   gcc
 )

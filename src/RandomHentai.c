@@ -1,24 +1,64 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <taihen.h>
 #include <vitasdk.h>
-#include <psp2kern/kernel/sysmem.h>
+#include <math.h>
 
 #include "jpeg.h"
 
-#define FILENAME			"ux0:/data/randomhentai/saved/51418.jpg"
+#define FILENAME			"ux0:/data/randomhentai/saved/247566.jpg"
 
 #define HOOKS_NUM 7
+
+#define VDISP_FRAME_WIDTH		960
+#define VDISP_FRAME_HEIGHT		544
+#define VDISP_HALF_WIDTH 		VDISP_FRAME_WIDTH / 2
+#define VDISP_HALF_HEIGHT 		VDISP_FRAME_HEIGHT / 2
+
+SceBool sceCommonDialogIsRunning(void);
 
 static uint8_t current_hook;
 static SceUID hooks[HOOKS_NUM];
 static tai_hook_ref_t hook_refs[HOOKS_NUM];
 
-SceUID _sceSharedFbOpen(int a1, int sysver);
-int sceSharedFbGetInfo(SceUID shared_fb_id, SceSharedFbInfo *info);
+SceDisplayFrameBuf bframe;
 
-// Set Decoder Status
+typedef enum HentaiStatus {
+	HENTAI_IDLE,
+	HENTAI_RUNNING,
+	HENTAI_ERROR,
+} HentaiStatus;
+
+typedef struct ColorSurface {
+	void *data;
+	SceGxmColorSurface *surface;
+	struct ColorSurface *next;
+} ColorSurface;
+
+typedef struct HentaiRenderTarget {
+	const SceGxmRenderTarget *target;
+	struct HentaiRenderTarget *next;
+} HentaiRenderTarget;
+
+// Set Decoder Stuff
 JpegDecStatus status;
 Jpeg_texture *texture;
+static void *frameBufAddress[6];
+int frameBufIndex = 0;
+
+typedef enum RenderTargetInitStatus {
+	RENDERTARGET_IDLE,
+	RENDERTARGET_FIRST_SCENE,
+	RENDERTARGET_ALL_FRAMEBUFFERS,
+	RENDERTARGET_FINISHED,
+	RENDERTARGET_ERROR,
+} RenderTargetInitStatus;
+
+static ColorSurface *cs;
+static HentaiRenderTarget *hentaiRenderTarget;
+
+// Hentai Thread Status
+HentaiStatus hentaiStatus;
 
 // Define Vertex Values
 typedef struct VertexV32T32 {
@@ -54,9 +94,26 @@ static SceUInt16	*indices = NULL;
 float			ratioX, ratioY, minX, minY, maxX, maxY;
 float _vita2d_ortho_matrix[4*4];
 
-int hentai_thread(SceSize args, void *argp) {
+int bufferCount = 0;
+SceBool firstRenderTarget;
+SceBool mainRenderParams;
+int intialSwaps = 0;
 
-}
+
+// Last SceGxmBeginScene Params
+SceGxmContext *lastContext;
+unsigned int lastFlags;
+const SceGxmRenderTarget *lastRenderTarget;
+const SceGxmValidRegion *lastValidRegion;
+SceGxmSyncObject *lastVertexSyncObject;
+SceGxmSyncObject *lastFragmentSyncObject;
+const SceGxmColorSurface *lastColorSurface;
+const SceGxmDepthStencilSurface *lastDepthStencil;
+RenderTargetInitStatus renderTargetStatus;
+
+// Last SceGxmEndScene Params
+const SceGxmNotification *lastVertexNotification;
+const SceGxmNotification *lastFragmentNotification;
 
 void hookFunction(uint32_t nid, const void *func){
 	hooks[current_hook] = taiHookFunctionImport(&hook_refs[current_hook],TAI_MAIN_MODULE,TAI_ANY_LIBRARY,nid,func);
@@ -90,6 +147,18 @@ void* gpu_alloc_map(SceKernelMemBlockType type, SceGxmMemoryAttribFlags gpu_attr
 	return addr;
 }
 
+void* alloc(size_t size) {
+	SceUID memuid;
+	void *addr;
+	size = ALIGN(size, 4 * 1024);
+	memuid = sceKernelAllocMemBlock("memory", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, size, NULL);
+	if (memuid < 0)
+		return NULL;
+	if (sceKernelGetMemBlockBase(memuid, &addr) < 0)
+		return NULL;
+	return addr;
+}
+
 void graphicsFree(SceUID uid)
 {
 	int ret = 0;
@@ -115,6 +184,7 @@ void graphicsFree(SceUID uid)
 
 void freeJpegTexture(void) {
 	if (texture) {
+		printf("Fucking with textures\n");
 		if (texture->gxm_rtgt) {
 			sceGxmDestroyRenderTarget(texture->gxm_rtgt);
 		}
@@ -126,6 +196,7 @@ void freeJpegTexture(void) {
 		}
 		graphicsFree(texture->data_UID);
 		graphicsFree(texture->textureUID);
+		texture = NULL;
 	}
 }
 
@@ -261,8 +332,8 @@ int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params
 	matrix_init_orthographic(_vita2d_ortho_matrix, 0.0f, 960, 544, 0.0f, 0.0f, 1.0f);
 
 	printf("Initialized Verteces and Indices\n");
-	rh_JPEG_decoder_initialize();
-	status = JPEG_DEC_DECODING;
+	status = JPEG_DEC_WAITING;
+	hentaiStatus = HENTAI_RUNNING;
 
 	return ret;
 }
@@ -271,43 +342,26 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
 {	
 	int ret;
 
-	if (status == JPEG_DEC_DIAG_TERM) {
-		rh_JPEG_decoder_initialize();
-		status = JPEG_DEC_DECODING;
-	}
+	if (status == JPEG_DEC_DISPLAY) {
 
-    if (status == JPEG_DEC_DECODING) {
-        printf("Decoding Texture\n");
-        texture = rh_load_JPEG_file(FILENAME);
-        if (texture == NULL) {
-            printf("Error Decoding Texture\n");
-			rh_JPEG_decoder_finish();
-            status = JPEG_DEC_ERROR;
-            goto skip;
-        }
-        printf("Decoded Texture\n");
-		rh_JPEG_decoder_finish();
-        status = JPEG_DEC_DECODED;
-    }
-    if (status == JPEG_DEC_DECODED) {
 		int width = texture->validWidth;
         int height = texture->validHeight;
+		float x = width/2.0f;
+		float y = height/2.0f;
+		float zoom;
 
-		if (width > 960) {
-			width = 960;
+		if (width < VDISP_FRAME_WIDTH) {
+			zoom = VDISP_FRAME_WIDTH / (float)width;
+		} else if (height < VDISP_FRAME_HEIGHT) {
+			zoom = VDISP_FRAME_HEIGHT / (float)height;
+		} else {
+			zoom = 1.0f;
 		}
 
-		if (height > 544) {
-			height = 544;
-		}
-
-        printf("%dx%d\n", width, height);
-
-
-        minX = (float)(960 / 2) - (float)(width / 2);
-        minY = (float)(544 / 2) - (float)(height / 2);
-        maxX = minX + (float)width;
-        maxY = minY + (float)height;
+        minX = -(float)(zoom * x);
+        minY = -(float)(zoom * y);
+        maxX = minX + (float)(zoom * width);
+        maxY = minY + (float)(zoom * height);
 
         vertices[0].x = minX;
         vertices[0].y = minY;
@@ -333,6 +387,16 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
         vertices[3].u = 1.0f;
         vertices[3].v = 1.0f;
 
+		float c = cosf(0);
+		float s = sinf(0);
+		int i;
+		for (i = 0; i < 4; ++i) {
+			float _x = vertices[i].x;
+			float _y = vertices[i].y;
+			vertices[i].x = _x*c - _y*s + (float)(VDISP_HALF_WIDTH);
+			vertices[i].y = _x*s + _y*c + (float)(VDISP_HALF_HEIGHT);
+		}
+
         printf("1: X:%f, Y:%f, Z:%f\n2: X:%f, Y:%f, Z:%f\n3: X:%f, Y:%f, Z:%f\n4: X:%f, Y:%f, Z:%f\n", vertices[0].x, vertices[0].y, vertices[0].z , vertices[1].x, vertices[1].y, vertices[1].z , vertices[2].x, vertices[2].y, vertices[2].z , vertices[3].x, vertices[3].y, vertices[3].z );
 
 		/* Set texture */
@@ -356,50 +420,13 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
         ret = sceGxmSetVertexStream(context, 0, vertices);
         printf("Vertex Stream output: %d\n", ret);
 
-		if (status == JPEG_DEC_DECODED) {           // double check in case Dialog Runs
-			printf("Starting to Draw\n");
-        	ret = sceGxmDraw(context, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices, 4);
-        	printf("GxmDraw Output: %d\n", ret);
+		printf("Starting to Draw\n");
+        ret = sceGxmDraw(context, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices, 4);
+        printf("GxmDraw Output: 0x%08x\n", ret);
 
-        	printf("Finished Drawing\n");
-		}
+        printf("Finished Drawing\n");
     }
-    skip:
 	ret = TAI_CONTINUE(int, hook_refs[1], context, vertexNotification, fragmentNotification);
-	return ret;
-}
-
-int sceNpTrophySetupDialogInit_hentaiTime(void *opt) {
-	status = JPEG_DEC_NO_INIT;
-	printf("TrophySetupDialog Started!\n");
-	if (texture) {
-		freeJpegTexture();
-		printf("Freed Texture\n");
-	}
-	return TAI_CONTINUE(int, hook_refs[2], opt);
-}
-
-int sceNpTrophySetupDialogTerm_hentaiTime() {
-	printf("TrophySetupDialog Terminated!\n");
-	int ret = TAI_CONTINUE(int, hook_refs[3]);
-	status = JPEG_DEC_DIAG_TERM;
-	return ret;
-}
-
-int sceImeDialogInit_hentaiTime(const SceImeDialogParam *param) {
-	status = JPEG_DEC_NO_INIT;
-	printf("ImeDialog Started!\n");
-	if (texture) {
-		freeJpegTexture();
-		printf("Freed Texture\n");
-	}
-	return TAI_CONTINUE(int, hook_refs[4], param);
-}
-
-int sceImeDialogTerm_hentaiTime() {
-	printf("ImeDialog Terminated!\n");
-	int ret = TAI_CONTINUE(int, hook_refs[5]);
-	status = JPEG_DEC_DIAG_TERM;
 	return ret;
 }
 
@@ -416,12 +443,209 @@ int sceGxmInitialize_hentaiTime(const SceGxmInitializeParams *params) {
 	initializeParams.displayQueueCallback = params->displayQueueCallback;
 	initializeParams.displayQueueCallbackDataSize = params->displayQueueCallbackDataSize;
 	initializeParams.parameterBufferSize = 6291456;
+	printf("Display Queue Max Pending Count %d\n", initializeParams.displayQueueMaxPendingCount);
 	printf("New parameterBufferSize %d\n", initializeParams.parameterBufferSize);
 
-	int ret = TAI_CONTINUE(int, hook_refs[6], &initializeParams);
+	int ret = TAI_CONTINUE(int, hook_refs[2], &initializeParams);
 	printf("Gxm Initialize Out: 0x%08x\n", ret);
 	
 	return ret;
+}
+
+int sceDisplaySetFrameBuf_hentaiTime(const SceDisplayFrameBuf *pParam, SceDisplaySetBufSync sync) {
+	if (renderTargetStatus == RENDERTARGET_FIRST_SCENE) {
+		void *currentBackBuffer = pParam->base;
+		if (frameBufIndex > 0) {
+			int i = 0;
+			while (i < frameBufIndex) {
+				if (frameBufAddress[i] == currentBackBuffer) {
+					frameBufAddress[frameBufIndex] = (int *)1;
+					printf("Full Circle\n");
+					renderTargetStatus = RENDERTARGET_ALL_FRAMEBUFFERS;
+					goto skipBuffer;
+				}
+				i++;
+			}
+		}
+		frameBufAddress[frameBufIndex] = currentBackBuffer;
+		printf("FrameBufAddress Pointer Address: %x\nOriginal FrameBufAddress: %x\nFrameBuffer Size: %dx%d\n\n", frameBufAddress[frameBufIndex], currentBackBuffer, pParam->width, pParam->height);
+		frameBufIndex++;
+	}
+	skipBuffer:
+	return TAI_CONTINUE(int, hook_refs[3], pParam, sync);;
+
+}
+
+int sceGxmCreateRenderTarget_hentaiTime(const SceGxmRenderTargetParams *params, SceGxmRenderTarget **renderTarget) {
+	int ret = TAI_CONTINUE(int, hook_refs[4], params, renderTarget);
+	printf("Render Target Params\nResolution: %dx%d\nScenes Per Frame: %d\n\n", params->width, params->height, params->scenesPerFrame);
+	return ret;
+}
+
+int sceGxmBeginScene_hentaiTime(SceGxmContext *context, unsigned int flags, const SceGxmRenderTarget *renderTarget, const SceGxmValidRegion *validRegion,
+									SceGxmSyncObject *vertexSyncObject, SceGxmSyncObject *fragmentSyncObject, const SceGxmColorSurface *colorSurface, const SceGxmDepthStencilSurface *depthStencil ) {
+	ColorSurface *current = cs;
+	HentaiRenderTarget *currentTarget = hentaiRenderTarget;
+	SceBool disable = SCE_TRUE;
+	if (renderTargetStatus == RENDERTARGET_IDLE) {
+		renderTargetStatus = RENDERTARGET_FIRST_SCENE;
+	}
+	if (depthStencil) {
+		printf("Depth: %f", depthStencil->backgroundDepth);
+	}
+	if (status == JPEG_DEC_DECODED && renderTargetStatus == RENDERTARGET_FINISHED) {
+		while (currentTarget->next) {
+			if (currentTarget->target == renderTarget) {
+				printf("Enable Draw on Scene\n");
+				status = JPEG_DEC_DISPLAY;
+				break;
+			}
+			currentTarget = currentTarget->next;
+		}
+	} else if (status == JPEG_DEC_DISPLAY && renderTargetStatus == RENDERTARGET_FINISHED) {
+		while (currentTarget->next) {
+			if (currentTarget->target != renderTarget) {
+				currentTarget = currentTarget->next;
+			} else {
+				disable = SCE_FALSE;
+				break;
+			}
+		}
+		if (disable == SCE_TRUE) {
+			printf("Disable Draw on Scene\n");
+			status = JPEG_DEC_DECODED;
+		}
+	}
+	if (renderTargetStatus == RENDERTARGET_ALL_FRAMEBUFFERS) {
+		while (current->next) {
+			printf("First Loop: Current Data: %x Current Surface: %x\n", current->data, current->surface);
+			if (current->surface == colorSurface) {
+				for (int i=0;i<frameBufIndex;i++) {
+					printf("Second Loop\n");
+					if (frameBufAddress[i] == current->data) {
+						while (currentTarget->next)
+						{
+							printf("Third Loop\n");
+							if (currentTarget->target == renderTarget) {
+								printf("Render Target Full Circle\n");
+								renderTargetStatus = RENDERTARGET_FINISHED;
+								goto renderTargetFinish;
+							}
+							currentTarget = currentTarget->next;
+						}
+						currentTarget->target = renderTarget;
+						currentTarget->next = (HentaiRenderTarget *)alloc(sizeof(HentaiRenderTarget));
+						printf("\nAdded Hentai Render Target: %x\n\n", currentTarget->target);
+						goto renderTargetFinish;
+					}
+				}
+			}
+			current = current->next;
+		}
+	}
+	renderTargetFinish:
+	printf("Ran GxmBeginScene:\nGXM Flags: %d Render Target: %x\n Color Surface: %x\n", flags, renderTarget, colorSurface);
+	if (validRegion) {
+		printf("Valid Region: %dx%d to %dx%d\n",validRegion->xMin, validRegion->yMin, validRegion->xMax, validRegion->yMax);
+	}
+
+	return TAI_CONTINUE(int, hook_refs[5], context, flags, renderTarget, validRegion, vertexSyncObject, fragmentSyncObject, colorSurface, depthStencil);
+}
+
+int sceGxmColorSurfaceInit_hentaiTime(SceGxmColorSurface *surface, SceGxmColorFormat colorFormat, SceGxmColorSurfaceType surfaceType, SceGxmColorSurfaceScaleMode scaleMode,
+										SceGxmOutputRegisterSize outputRegisterSize, unsigned int width, unsigned int height, unsigned int strideInPixels, void *data) {
+	ColorSurface *current = cs;
+	while (current->next)
+	{
+		current = current->next;
+	}
+	current->data = data;
+	current->surface = surface;
+	//ColorSurface *nextSurface;
+	//sceClibMemset(&nextSurface, 0, sizeof(ColorSurface));
+	current->next = (ColorSurface *)alloc(sizeof(ColorSurface));
+
+	printf("Ran sceGxmColorSurfaceInit: Color Surface: %x\nCurrent Data: %x\nData: %x\n", surface, current->data, data);
+	
+	return TAI_CONTINUE(int, hook_refs[6], surface, colorFormat, surfaceType, scaleMode, outputRegisterSize, width, height, strideInPixels, data);;
+}
+
+int hentai_thread(SceSize args, void *argp) {
+	int ret;
+	// Random Number Generator Variables
+	int interval;
+	SceUInt randomNumber;
+	int max = 15;
+	int min = 0;
+	// Control Variable
+	SceCtrlData ctrl;
+	// Framebuffer Stuff
+	bframe.size = sizeof(SceDisplayFrameBuf);
+	// Main Loop
+	while(1) {
+		sceKernelDelayThread(1000);
+		while (hentaiStatus == HENTAI_RUNNING && renderTargetStatus == RENDERTARGET_FINISHED) {
+			sceKernelDelayThread(1000);
+			if (status == JPEG_DEC_WAITING) {
+				wait:
+				sceKernelGetRandomNumber(&randomNumber, 4);
+				interval = ((randomNumber % (max-min+1)) + min)*1000000;
+				printf("I Will Show A Picture in %d Seconds\n", interval/1000000);
+				sceKernelDelayThread(interval);
+				SceBool running = sceCommonDialogIsRunning();
+				if (running) {
+					printf("Common Dialog is Running: %d\n", running);
+					goto wait;
+				}
+				printf("Common Dialog Isn't Running: %d\nContinuing...\n", running);
+				// Only enable for Debug
+				//goto wait;
+			}
+			if (status != JPEG_DEC_DECODED && status != JPEG_DEC_DECODING && status != JPEG_DEC_ERROR && status != JPEG_DEC_DISPLAY) {
+				status = JPEG_DEC_DECODING;
+			}
+			if (status == JPEG_DEC_DECODING) {
+				sceDisplayGetFrameBuf(&bframe, 0);
+				printf("Framebuffer Resolution: %dx%d\n", bframe.width, bframe.height);
+				if (texture) {
+					freeJpegTexture();
+					printf("Freed Texture\n");
+				}
+				ret = rh_JPEG_decoder_initialize();
+				if (ret < 0) {
+					status = JPEG_DEC_ERROR;
+					continue;
+				}
+				printf("Decoding Texture\n");
+				texture = rh_load_JPEG_file(FILENAME, &bframe);
+				if (texture == NULL) {
+					printf("Error Decoding Texture\n");
+					rh_JPEG_decoder_finish();
+					status = JPEG_DEC_ERROR;
+					continue;
+				}
+				printf("Decoded Texture\n");
+				rh_JPEG_decoder_finish();
+				status = JPEG_DEC_DECODED;
+			}
+			if (status == JPEG_DEC_DECODED || status == JPEG_DEC_DISPLAY) {
+				sceCtrlPeekBufferPositive(0, &ctrl, 1);
+				if (ctrl.buttons == (SCE_CTRL_LTRIGGER | SCE_CTRL_CIRCLE)) {
+					status = JPEG_DEC_WAITING;
+				}
+			}
+			if (status == JPEG_DEC_ERROR) {
+				printf("Error Occured with JPEG Decoder. We're just gonna try again later\n");
+				status = JPEG_DEC_WAITING;
+			}
+		}
+		if (hentaiStatus == HENTAI_ERROR) {
+			printf("Error Occurred. Stopping Plugin\n");
+			module_stop(NULL, NULL);
+			sceKernelExitDeleteThread(0);
+		}
+	}
+	return 0;
 }
 
 
@@ -433,23 +657,27 @@ int module_start(SceSize argc, const void *args) {
 	printf("Initialized Hook 0\n");
 	hookFunction(0xFE300E2F, sceGxmEndScene_hentaiTime);
 	printf("Initialized Hook 1\n");			
-	hookFunction(0x9E2C02C9, sceNpTrophySetupDialogInit_hentaiTime);
-	printf("Initialized Hook 2\n");
-	hookFunction(0xA81082DD, sceNpTrophySetupDialogTerm_hentaiTime);
-	printf("Initialized Hook 3\n");
-	hookFunction(0x1E7043BF, sceImeDialogInit_hentaiTime);
-	printf("Initialized Hook 4\n");
-	hookFunction(0x838A3AF4, sceImeDialogTerm_hentaiTime);
-	printf("Initialized Hook 5\n");
 	hookFunction(0xB0F1E4EC, sceGxmInitialize_hentaiTime);
+	printf("Initialized Hook 2\n");
+	hookFunction(0x7A410B64, sceDisplaySetFrameBuf_hentaiTime);
+	printf("Initialized Hook 3\n");
+	hookFunction(0x207AF96B, sceGxmCreateRenderTarget_hentaiTime);
+	printf("Initialized Hook 4\n");
+	hookFunction(0x8734FF4E, sceGxmBeginScene_hentaiTime);
+	printf("Initialized Hook 5\n");
+	hookFunction(0xED0F6E25, sceGxmColorSurfaceInit_hentaiTime);
 	printf("Initialized Hook 6\n");
 
 	SceUID thid;
-	thid = sceKernelCreateThread("hentai_thread", hentai_thread, 0x10000100, 0x10000, 0, 0, NULL);
+	thid = sceKernelCreateThread("hentai_thread", hentai_thread, 0x60, 0x10000, 0, 0, NULL);
 
 	if (thid >= 0)
 		sceKernelStartThread(thid, 0, NULL); 
 	
+	//sceClibMemset(&cs, 0, sizeof(ColorSurface));
+	cs = (ColorSurface *)alloc(sizeof(ColorSurface));
+	hentaiRenderTarget = (HentaiRenderTarget *)alloc(sizeof(HentaiRenderTarget));
+
 	return SCE_KERNEL_START_SUCCESS;
 }
 int module_stop(SceSize argc, const void *args) {

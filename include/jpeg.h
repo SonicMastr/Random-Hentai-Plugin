@@ -38,8 +38,10 @@ typedef struct SceSharedFbInfo { // size is 0x58
 
 typedef enum JpegDecStatus {
 	JPEG_DEC_IDLE,
+	JPEG_DEC_WAITING,
 	JPEG_DEC_DECODED,
 	JPEG_DEC_DECODING,
+	JPEG_DEC_DISPLAY,
 	JPEG_DEC_NO_INIT,
 	JPEG_DEC_DIAG_TERM,
 	JPEG_DEC_ERROR,
@@ -58,8 +60,8 @@ typedef struct Jpeg_texture {
 	SceInt validWidth;
 } Jpeg_texture;
 
-void rh_JPEG_decoder_initialize(void);
+int rh_JPEG_decoder_initialize(void);
 void rh_JPEG_decoder_finish(void);
-Jpeg_texture *rh_load_JPEG_file(const char *filename);
+Jpeg_texture *rh_load_JPEG_file(const char *filename, SceDisplayFrameBuf *bframe);
 
 #endif
