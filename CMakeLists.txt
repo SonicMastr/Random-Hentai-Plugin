@@ -55,7 +55,7 @@ endforeach()
 foreach(gxp ${SHADER_GXPS})
 	get_filename_component(gxp_we ${gxp} NAME_WE)
 	add_custom_command(OUTPUT "${gxp_we}_gxp.o"
-		COMMAND arm-vita-eabi-objcopy --input-target binary --output-target elf32-littlearm
+		COMMAND arm-vita-eabi-objcopy -I binary -O elf32-littlearm
 			--binary-architecture arm "${gxp}"
 			"${CMAKE_BINARY_DIR}/${gxp_we}_gxp.o"
 		WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"

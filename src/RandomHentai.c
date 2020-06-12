@@ -8,7 +8,7 @@
 
 #define FILENAME			"ux0:/data/randomhentai/saved/247566.jpg"
 
-#define HOOKS_NUM 7
+#define HOOKS_NUM 9
 
 #define VDISP_FRAME_WIDTH		960
 #define VDISP_FRAME_HEIGHT		544
@@ -71,16 +71,20 @@ typedef float matrix4x4[4][4];
 // shader patcher
 SceGxmShaderPatcher *patcher;
 
-extern const SceGxmProgram texture_v_gxp_start;
-extern const SceGxmProgram texture_f_gxp_start;
+// Depth Stuff
+SceGxmDepthStencilSurface *defaultDepthStencilSurface;
 
-static const SceGxmProgram *const textureVertexProgramGxp       = &texture_v_gxp_start;
-static const SceGxmProgram *const textureFragmentProgramGxp     = &texture_f_gxp_start;
+extern const SceGxmProgram _binary_texture_v_gxp_start;
+extern const SceGxmProgram _binary_texture_f_gxp_start;
+
+static const SceGxmProgram *const textureVertexProgramGxp       = &_binary_texture_v_gxp_start;
+static const SceGxmProgram *const textureFragmentProgramGxp     = &_binary_texture_f_gxp_start;
 
 static SceGxmShaderPatcherId  vertexProgramId;
 static SceGxmShaderPatcherId  fragmentProgramId;
-static SceGxmVertexProgram	   *vertexProgram = NULL;
+static SceGxmVertexProgram	  *vertexProgram = NULL;
 static SceGxmFragmentProgram  *fragmentProgram = NULL;
+static SceGxmFragmentProgram  *maskFragmentProgram = NULL;
 
 static inline int min(int a, int b) { return a < b ? a : b; }
 
@@ -301,11 +305,13 @@ int sceGxmShaderPatcherCreate_hentaiTime(const SceGxmShaderPatcherParams *params
 		patcher,
 		fragmentProgramId,
 		SCE_GXM_OUTPUT_REGISTER_FORMAT_UCHAR4,
-		SCE_GXM_MULTISAMPLE_NONE,
+		SCE_GXM_MULTISAMPLE_4X,
 		&blendInfo,
 		textureVertexProgramGxp,
 		&fragmentProgram);
 	printf("Patcher Create Fragment Out: 0x%08x\n", res);
+
+	sceGxmShaderPatcherCreateMaskUpdateFragmentProgram(patcher, &maskFragmentProgram);
 
 	if (vertices) {
 		graphicsFree(verticesUid);
@@ -346,8 +352,8 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
 
 		int width = texture->validWidth;
         int height = texture->validHeight;
-		float x = width/2.0f;
-		float y = height/2.0f;
+		//float x = width/2.0f;
+		//float y = height/2.0f;
 		float zoom;
 
 		if (width < VDISP_FRAME_WIDTH) {
@@ -358,64 +364,93 @@ int sceGxmEndScene_hentaiTime(SceGxmContext *context, const SceGxmNotification *
 			zoom = 1.0f;
 		}
 
-        minX = -(float)(zoom * x);
-        minY = -(float)(zoom * y);
-        maxX = minX + (float)(zoom * width);
-        maxY = minY + (float)(zoom * height);
+        minX = -zoom;
+        minY = -zoom;
+        maxX = minX + (zoom * 2);
+        maxY = minY + (zoom * 2);
 
         vertices[0].x = minX;
         vertices[0].y = minY;
-        vertices[0].z = 1.0f;
+        vertices[0].z = 0.0f;
         vertices[0].u = 0.0f;
-        vertices[0].v = 0.0f;
+        vertices[0].v = 1.0f;
 
         vertices[1].x = maxX;
         vertices[1].y = minY;
-        vertices[1].z = 1.0f;
+        vertices[1].z = 0.0f;
         vertices[1].u = 1.0f;
-        vertices[1].v = 0.0f;
+        vertices[1].v = 1.0f;
 
         vertices[2].x = minX;
         vertices[2].y = maxY;
-        vertices[2].z = 1.0f;
+        vertices[2].z = 0.0f;
         vertices[2].u = 0.0f;
-        vertices[2].v = 1.0f;
+        vertices[2].v = 0.0f;
 
         vertices[3].x = maxX;
         vertices[3].y = maxY;
-        vertices[3].z = 1.0f;
+        vertices[3].z = 0.0f;
         vertices[3].u = 1.0f;
-        vertices[3].v = 1.0f;
+        vertices[3].v = 0.0f;
 
-		float c = cosf(0);
-		float s = sinf(0);
-		int i;
-		for (i = 0; i < 4; ++i) {
-			float _x = vertices[i].x;
-			float _y = vertices[i].y;
-			vertices[i].x = _x*c - _y*s + (float)(VDISP_HALF_WIDTH);
-			vertices[i].y = _x*s + _y*c + (float)(VDISP_HALF_HEIGHT);
-		}
+		//float c = cosf(0);
+		//float s = sinf(0);
+		//int i;
+		// for (i = 0; i < 4; ++i) {
+		// 	float _x = vertices[i].x;
+		// 	float _y = vertices[i].y;
+		// 	vertices[i].x = _x*c - _y*s + (float)(VDISP_HALF_WIDTH);
+		// 	vertices[i].y = _x*s + _y*c + (float)(VDISP_HALF_HEIGHT);
+		// }
 
         printf("1: X:%f, Y:%f, Z:%f\n2: X:%f, Y:%f, Z:%f\n3: X:%f, Y:%f, Z:%f\n4: X:%f, Y:%f, Z:%f\n", vertices[0].x, vertices[0].y, vertices[0].z , vertices[1].x, vertices[1].y, vertices[1].z , vertices[2].x, vertices[2].y, vertices[2].z , vertices[3].x, vertices[3].y, vertices[3].z );
 
+
+		// sceGxmSetFrontStencilFunc(
+		// 	context,
+		// 	SCE_GXM_STENCIL_FUNC_ALWAYS,
+		// 	SCE_GXM_STENCIL_OP_KEEP,
+		// 	SCE_GXM_STENCIL_OP_KEEP,
+		// 	SCE_GXM_STENCIL_OP_KEEP,
+		// 	0,
+		// 	0);
+		// sceGxmSetBackStencilFunc(
+		// 	context,
+		// 	SCE_GXM_STENCIL_FUNC_ALWAYS,
+		// 	SCE_GXM_STENCIL_OP_KEEP,
+		// 	SCE_GXM_STENCIL_OP_KEEP,
+		// 	SCE_GXM_STENCIL_OP_KEEP,
+		// 	0,
+		// 	0);
 		/* Set texture */
 		ret = sceGxmSetFragmentTexture(context, 0, &texture->gxm_tex);
         printf("Fragment Texture output: %d\n", ret);
 
         /* Set texture shaders */
         sceGxmSetVertexProgram(context, vertexProgram);
-        sceGxmSetFragmentProgram(context, fragmentProgram);
+		sceGxmSetFragmentProgram(context, fragmentProgram);
+		sceGxmSetFrontDepthFunc(
+			context,
+			SCE_GXM_DEPTH_FUNC_ALWAYS
+		);
+		sceGxmSetFrontStencilFunc(
+			context,
+			SCE_GXM_STENCIL_FUNC_ALWAYS,
+			SCE_GXM_STENCIL_OP_KEEP,
+			SCE_GXM_STENCIL_OP_KEEP,
+			SCE_GXM_STENCIL_OP_KEEP,
+			0xFF,
+			0xFF);
 
         /* Draw the texture */
 
-        void *vertex_wvp_buffer;
+        //void *vertex_wvp_buffer;
 
-        ret = sceGxmReserveVertexDefaultUniformBuffer(context, &vertex_wvp_buffer);
-        printf("Reserved Uniform Data output:0x%08x\n", ret);
+        //ret = sceGxmReserveVertexDefaultUniformBuffer(context, &vertex_wvp_buffer);
+        //printf("Reserved Uniform Data output:0x%08x\n", ret);
 
-        ret = sceGxmSetUniformDataF(vertex_wvp_buffer, wvp, 0, 16, _vita2d_ortho_matrix);
-        printf("Uniform Data output: %d\n", ret);
+        //ret = sceGxmSetUniformDataF(vertex_wvp_buffer, wvp, 0, 16, _vita2d_ortho_matrix);
+        //printf("Uniform Data output: %d\n", ret);
 		
         ret = sceGxmSetVertexStream(context, 0, vertices);
         printf("Vertex Stream output: %d\n", ret);
@@ -491,7 +526,7 @@ int sceGxmBeginScene_hentaiTime(SceGxmContext *context, unsigned int flags, cons
 		renderTargetStatus = RENDERTARGET_FIRST_SCENE;
 	}
 	if (depthStencil) {
-		printf("Depth: %f", depthStencil->backgroundDepth);
+		printf("Depth: %f\nData Address: %x\n", depthStencil->backgroundDepth, depthStencil->stencilData);
 	}
 	if (status == JPEG_DEC_DECODED && renderTargetStatus == RENDERTARGET_FINISHED) {
 		while (currentTarget->next) {
@@ -565,9 +600,14 @@ int sceGxmColorSurfaceInit_hentaiTime(SceGxmColorSurface *surface, SceGxmColorFo
 	//sceClibMemset(&nextSurface, 0, sizeof(ColorSurface));
 	current->next = (ColorSurface *)alloc(sizeof(ColorSurface));
 
-	printf("Ran sceGxmColorSurfaceInit: Color Surface: %x\nCurrent Data: %x\nData: %x\n", surface, current->data, data);
+	printf("Ran sceGxmColorSurfaceInit: Color Surface: %x\nCurrent Data: %x\nData: %x\nColor Format: %d\n", surface, current->data, data, colorFormat);
 	
 	return TAI_CONTINUE(int, hook_refs[6], surface, colorFormat, surfaceType, scaleMode, outputRegisterSize, width, height, strideInPixels, data);;
+}
+
+int sceGxmSetFrontDepthFunc_hentaiTime(SceGxmContext *context, SceGxmDepthFunc depthFunc) {
+	printf("Depth Function: %d\n", depthFunc);
+	return TAI_CONTINUE(int, hook_refs[7], context, depthFunc);
 }
 
 int hentai_thread(SceSize args, void *argp) {
@@ -581,6 +621,7 @@ int hentai_thread(SceSize args, void *argp) {
 	SceCtrlData ctrl;
 	// Framebuffer Stuff
 	bframe.size = sizeof(SceDisplayFrameBuf);
+
 	// Main Loop
 	while(1) {
 		sceKernelDelayThread(1000);
@@ -667,6 +708,9 @@ int module_start(SceSize argc, const void *args) {
 	printf("Initialized Hook 5\n");
 	hookFunction(0xED0F6E25, sceGxmColorSurfaceInit_hentaiTime);
 	printf("Initialized Hook 6\n");
+	hookFunction(0x14BD831F, sceGxmSetFrontDepthFunc_hentaiTime);
+	printf("Initialized Hook 7\n");
+
 
 	SceUID thid;
 	thid = sceKernelCreateThread("hentai_thread", hentai_thread, 0x60, 0x10000, 0, 0, NULL);

@@ -429,11 +429,6 @@ int jpegdecInit(SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSiz
 	SceKernelMemBlockType memBlockType = SCE_KERNEL_MEMBLOCK_TYPE_USER_MAIN_PHYCONT_NC_RW;
 	SceSize memBlockAlign = 1024 * 1024;
  
-	streamBufSize = ROUND_UP(streamBufSize, 256);
-	decodeBufSize = ROUND_UP(decodeBufSize, 256);
-	coefBufSize = ROUND_UP(coefBufSize, 256);
-	totalBufSize = ROUND_UP(streamBufSize + decodeBufSize + coefBufSize, memBlockAlign);
-
 	sceKernelGetFreeMemorySize(&meminfo);
 	if (meminfo.size_phycont >= JPEG_TOTAL_BUFF_SIZE) {
 		initParam.option = SCE_JPEG_MJPEG_INIT_OPTION_LPDDR2_MEMORY;
@@ -452,6 +447,11 @@ int jpegdecInit(SceSize streamBufSize, SceSize decodeBufSize, SceSize coefBufSiz
 		return -1;
 	}
 	printf("PHYCONT: %d\nCDRAM: %d\nUSER: %d\n", meminfo.size_phycont, meminfo.size_cdram, meminfo.size_user);
+
+	streamBufSize = ROUND_UP(streamBufSize, 256);
+	decodeBufSize = ROUND_UP(decodeBufSize, 256);
+	coefBufSize = ROUND_UP(coefBufSize, 256);
+	totalBufSize = ROUND_UP(streamBufSize + decodeBufSize + coefBufSize, memBlockAlign);
 
 	s_decCtrl.bufferMemBlock = sceKernelAllocMemBlock("jpegdecBuffer",
 		memBlockType, totalBufSize, NULL);
