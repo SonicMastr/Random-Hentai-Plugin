@@ -70,8 +70,10 @@ endif()
 
 add_executable(${PROJECT_NAME}
   ${SHADER_OBJECTS}
-  src/RandomHentai.c
+  src/main.c
   src/jpeg.c
+  src/hentai.c
+  src/util.c
 )
 
 target_link_libraries(${PROJECT_NAME}

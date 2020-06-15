@@ -2,13 +2,10 @@
 #include <string.h>
 #include <arm_neon.h>
 #include <psp2/io/fcntl.h>
-#include <psp2/gxm.h>
 #include <psp2/jpeg.h>
-#include <psp2/display.h>
 #include "jpeg.h"
-#include <psp2/kernel/clib.h>
+#include "common.h"
 #include <malloc.h>
-#include <psp2/kernel/sysmem.h>
 #include <psp2/io/stat.h>
 
 #define GXM_TEX_MAX_SIZE 4096
@@ -510,7 +507,7 @@ void rh_JPEG_decoder_finish(void)
 	jpegdecTerm();
 }
 
-Jpeg_texture *rh_load_JPEG_file(const char *filename, SceDisplayFrameBuf *bframe)
+Jpeg_texture *rh_load_JPEG_file(const char *filename)
 {
 	int ret;
 	SceJpegOutputInfo outputInfo;
