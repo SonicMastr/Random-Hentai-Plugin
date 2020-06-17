@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "util.h"
+#include "dir.h"
 
 #define FILENAME "ux0:/data/randomhentai/saved/247566.jpg"
 
@@ -23,21 +24,22 @@ typedef enum HentaiTargetStatus {
 /* Shaders */
 extern const SceGxmProgram _binary_texture_v_gxp_start;
 extern const SceGxmProgram _binary_texture_f_gxp_start;
-static const SceGxmProgram *const textureVertexProgramGxp    = &_binary_texture_v_gxp_start;
-static const SceGxmProgram *const textureFragmentProgramGxp  = &_binary_texture_f_gxp_start;
-static SceGxmShaderPatcherId  vertexProgramId;
-static SceGxmShaderPatcherId  fragmentProgramId;
-static SceGxmVertexProgram	  *vertexProgram = NULL;
-static SceGxmFragmentProgram  *fragmentProgram = NULL;
+static const SceGxmProgram *const textureVertexProgramGxp	= &_binary_texture_v_gxp_start;
+static const SceGxmProgram *const textureFragmentProgramGxp	= &_binary_texture_f_gxp_start;
+static SceGxmShaderPatcherId	vertexProgramId;
+static SceGxmShaderPatcherId	fragmentProgramId;
+static SceGxmVertexProgram		*vertexProgram = NULL;
+static SceGxmFragmentProgram	*fragmentProgram = NULL;
 static const SceGxmProgramParameter *paramPositionAttribute = NULL;
 static const SceGxmProgramParameter *paramTextureAttribute = NULL;
 /* Vertices and Indices */
-static SceUID				   verticesUid;
-static SceUID				   indicesUid;
-static VertexV32T32 *vertices = NULL;
+static SceUID					verticesUid;
+static SceUID					indicesUid;
+static VertexV32T32	*vertices = NULL;
 static SceUInt16	*indices = NULL;
-
+/* Texture Data */
 Jpeg_texture *texture;
+/* Statuses */
 JpegDecStatus jpegStatus;
 HentaiTargetStatus hentaiStatus;
 
@@ -220,51 +222,51 @@ void hentaiDraw(SceGxmContext *context) {
 	if (jpegStatus == JPEG_DEC_DISPLAY) {
 		int width = texture->validWidth;
         int height = texture->validHeight;
-		float zoom, minX, minY, maxX, maxY;
+		float ratioX, ratioY, scaleX, scaleY, minX, minY, maxX, maxY, totalScale;
 
-		if (width < 960) {
-			zoom = 960 / (float)width;
-		} else if (height < 544) {
-			zoom = 544 / (float)height;
-		} else {
-			zoom = 1.0f;
-		}
+		/* Perform Scaling 
+			We're stuck using a range from [-1, 1] */
+		ratioX = width/(float)960;
+		ratioY = height/(float)544;
+		totalScale = 1/ratioX;
+		scaleX = ratioX*totalScale;
+		scaleY = ratioY*totalScale;
 
-        minX = -zoom;
-        minY = -zoom;
-        maxX = minX + (zoom * 2);
-        maxY = minY + (zoom * 2);
+		minX = -scaleX;
+		minY = -scaleY;
+		maxX = minX + (scaleX * 2);
+		maxY = minY + (scaleY * 2);
 
-        vertices[0].x = minX;
-        vertices[0].y = minY;
-        vertices[0].z = 0.0f;
-        vertices[0].u = 0.0f;
-        vertices[0].v = 1.0f;
+		vertices[0].x = minX;
+		vertices[0].y = minY;
+		vertices[0].z = 0.0f;
+		vertices[0].u = 0.0f;
+		vertices[0].v = 1.0f;
 
-        vertices[1].x = maxX;
-        vertices[1].y = minY;
-        vertices[1].z = 0.0f;
-        vertices[1].u = 1.0f;
-        vertices[1].v = 1.0f;
+		vertices[1].x = maxX;
+		vertices[1].y = minY;
+		vertices[1].z = 0.0f;
+		vertices[1].u = 1.0f;
+		vertices[1].v = 1.0f;
 
-        vertices[2].x = minX;
-        vertices[2].y = maxY;
-        vertices[2].z = 0.0f;
-        vertices[2].u = 0.0f;
-        vertices[2].v = 0.0f;
+		vertices[2].x = minX;
+		vertices[2].y = maxY;
+		vertices[2].z = 0.0f;
+		vertices[2].u = 0.0f;
+		vertices[2].v = 0.0f;
 
-        vertices[3].x = maxX;
-        vertices[3].y = maxY;
-        vertices[3].z = 0.0f;
-        vertices[3].u = 1.0f;
-        vertices[3].v = 0.0f;
+		vertices[3].x = maxX;
+		vertices[3].y = maxY;
+		vertices[3].z = 0.0f;
+		vertices[3].u = 1.0f;
+		vertices[3].v = 0.0f;
 
-        printf("1: X:%f, Y:%f, Z:%f\n2: X:%f, Y:%f, Z:%f\n3: X:%f, Y:%f, Z:%f\n4: X:%f, Y:%f, Z:%f\n", vertices[0].x, vertices[0].y, vertices[0].z , vertices[1].x, vertices[1].y, vertices[1].z , vertices[2].x, vertices[2].y, vertices[2].z , vertices[3].x, vertices[3].y, vertices[3].z );
+		//printf("1: X:%f, Y:%f, Z:%f\n2: X:%f, Y:%f, Z:%f\n3: X:%f, Y:%f, Z:%f\n4: X:%f, Y:%f, Z:%f\n", vertices[0].x, vertices[0].y, vertices[0].z , vertices[1].x, vertices[1].y, vertices[1].z , vertices[2].x, vertices[2].y, vertices[2].z , vertices[3].x, vertices[3].y, vertices[3].z );
 
 		/* Set texture */
 		sceGxmSetFragmentTexture(context, 0, &texture->gxm_tex);
-        /* Set texture shaders */
-        sceGxmSetVertexProgram(context, vertexProgram);
+		/* Set texture shaders */
+		sceGxmSetVertexProgram(context, vertexProgram);
 		sceGxmSetFragmentProgram(context, fragmentProgram);
 		/* Depth/Stencil Tests */
 		sceGxmSetFrontDepthFunc(
@@ -279,20 +281,27 @@ void hentaiDraw(SceGxmContext *context) {
 			SCE_GXM_STENCIL_OP_KEEP,
 			0xFF,
 			0xFF);
-        /* Draw the texture */	
-        sceGxmSetVertexStream(context, 0, vertices);
-        sceGxmDraw(context, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices, 4);
+		/* Draw the texture */	
+		sceGxmSetVertexStream(context, 0, vertices);
+		sceGxmDraw(context, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices, 4);
 	}
 }
 
 int hentaiRandomHentai(void) {
+	char *filename = getRandomImage();
+	if (!filename) {
+		return -1;
+	}
+	char fullPath[256] = "ux0:data/randomhentai/saved/\0";
+	strcat(fullPath, filename);
+	printf("Filename: %s\n", fullPath);
 	if (texture)
 		freeJpegTexture(texture);
 	if (rh_JPEG_decoder_initialize() < 0) {
 		jpegStatus = JPEG_DEC_ERROR;
 		return -1;
 	}
-	texture = rh_load_JPEG_file(FILENAME);
+	texture = rh_load_JPEG_file(fullPath);
 	if (!texture) {
 		rh_JPEG_decoder_finish();
 		jpegStatus = JPEG_DEC_ERROR;

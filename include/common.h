@@ -1,6 +1,8 @@
+#pragma once
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <string.h>
 #include <psp2/display.h>
 #include <psp2/gxm.h>
 #include <psp2/types.h>
@@ -9,6 +11,8 @@
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/kernel/modulemgr.h>
 #include <psp2/kernel/sysmem.h>
+#include <psp2/io/fcntl.h>
+#include <psp2/io/dirent.h> 
 
 #define ROUND_UP(x, a)	((((unsigned int)x)+((a)-1u))&(~((a)-1u)))
 #define ALIGN(x, a) (((x) + ((a) - 1)) & ~((a) - 1))

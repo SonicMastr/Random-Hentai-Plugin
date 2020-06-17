@@ -70,6 +70,7 @@ endif()
 
 add_executable(${PROJECT_NAME}
   ${SHADER_OBJECTS}
+  src/dir.c
   src/main.c
   src/jpeg.c
   src/hentai.c

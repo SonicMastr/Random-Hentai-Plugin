@@ -5,6 +5,7 @@
 #include <math.h>
 #include "common.h"
 #include "hentai.h"
+#include "dir.h"
 
 #define TICK 10000      // This isn't a literal tick. I can already see people commenting on this.
 #define SECOND 1000000
@@ -17,14 +18,14 @@ SceBool sceCommonDialogIsRunning(void);
 
 static SceUID HOOK(int id, uint32_t nid, const void *func){
 	hook[id] = taiHookFunctionImport(hook_ref+id,TAI_MAIN_MODULE,TAI_ANY_LIBRARY,nid,func);
-    return hook[id];
+	return hook[id];
 }
 
 static int hentai_thread(SceSize args, void *argp) {
 	/* Random Number Generator Variables */
 	SceUInt randomNumber;
 	int max = 15;
-	int min = 0;
+	int min = 2;
 	/* Control Variable */
 	SceCtrlData ctrl;
 
@@ -46,6 +47,7 @@ static int hentai_thread(SceSize args, void *argp) {
 						hentaiReset();
 					break;
 				case JPEG_DEC_ERROR:
+					hentaiReset();
 					break;
 				default:
 					break;
@@ -77,15 +79,15 @@ int sceDisplaySetFrameBuf_henTime(const SceDisplayFrameBuf *pParam, SceDisplaySe
 }
 
 int sceGxmColorSurfaceInit_henTime(SceGxmColorSurface *surface, SceGxmColorFormat colorFormat,
-    SceGxmColorSurfaceType surfaceType, SceGxmColorSurfaceScaleMode scaleMode,
-    SceGxmOutputRegisterSize outputRegisterSize, unsigned int width, 
-    unsigned int height, unsigned int strideInPixels, void *data) {
+	SceGxmColorSurfaceType surfaceType, SceGxmColorSurfaceScaleMode scaleMode,
+	SceGxmOutputRegisterSize outputRegisterSize, unsigned int width, 
+	unsigned int height, unsigned int strideInPixels, void *data) {
 	hentaiAddColorSurface(surface, data);
 	return TAI_CONTINUE(int, hook_ref[3], surface, colorFormat, surfaceType, scaleMode, outputRegisterSize, width, height, strideInPixels, data);
 }
 
 int sceGxmBeginScene_henTime(SceGxmContext *context, unsigned int flags, 
-    const SceGxmRenderTarget *renderTarget, const SceGxmValidRegion *validRegion,
+	const SceGxmRenderTarget *renderTarget, const SceGxmValidRegion *validRegion,
 	SceGxmSyncObject *vertexSyncObject, SceGxmSyncObject *fragmentSyncObject, 
     const SceGxmColorSurface *colorSurface, const SceGxmDepthStencilSurface *depthStencil ) {
 	
@@ -107,6 +109,7 @@ int sceGxmEndScene_henTime(SceGxmContext *context, const SceGxmNotification *ver
 }
 
 static void initializeMem(void) {
+	readDir();
 	hentaiInit();
 }
 
@@ -114,12 +117,12 @@ void _start() __attribute__ ((weak, alias ("module_start")));
 int module_start(SceSize argc, const void *args) {
 
 	initializeMem();
-    HOOK(0, 0xB0F1E4EC, sceGxmInitialize_henTime);
+	HOOK(0, 0xB0F1E4EC, sceGxmInitialize_henTime);
 	HOOK(1, 0x05032658, sceGxmShaderPatcherCreate_henTime);
 	HOOK(2, 0x7A410B64, sceDisplaySetFrameBuf_henTime);
-    HOOK(3, 0xED0F6E25, sceGxmColorSurfaceInit_henTime);
+	HOOK(3, 0xED0F6E25, sceGxmColorSurfaceInit_henTime);
 	HOOK(4, 0x8734FF4E, sceGxmBeginScene_henTime);
-    HOOK(5, 0xFE300E2F, sceGxmEndScene_henTime);
+	HOOK(5, 0xFE300E2F, sceGxmEndScene_henTime);
 
 	SceUID thid;
 	thid = sceKernelCreateThread("hentai_thread", hentai_thread, 0x60, 0x10000, 0, 0, NULL);
