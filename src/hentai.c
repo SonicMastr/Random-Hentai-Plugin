@@ -219,18 +219,19 @@ void hentaiSetDisplayState(const SceGxmRenderTarget *renderTarget) {
 }
 
 void hentaiDraw(SceGxmContext *context) {
+	int count = 0;
 	if (jpegStatus == JPEG_DEC_DISPLAY) {
 		int width = texture->validWidth;
         int height = texture->validHeight;
-		float ratioX, ratioY, scaleX, scaleY, minX, minY, maxX, maxY, totalScale;
+		float scaleX, scaleY, minX, minY, maxX, maxY, totalsca;
 
-		/* Perform Scaling 
-			We're stuck using a range from [-1, 1] */
-		ratioX = width/(float)960;
-		ratioY = height/(float)544;
-		totalScale = 1/ratioX;
-		scaleX = ratioX*totalScale;
-		scaleY = ratioY*totalScale;
+		scaleX = width/(float)960;
+		scaleY = height/(float)544;
+
+		float totalScale = 1/scaleX;
+
+		scaleX = scaleX*totalScale;
+		scaleY = scaleY*totalScale;
 
 		minX = -scaleX;
 		minY = -scaleY;
@@ -290,6 +291,7 @@ void hentaiDraw(SceGxmContext *context) {
 int hentaiRandomHentai(void) {
 	char *filename = getRandomImage();
 	if (!filename) {
+		jpegStatus = JPEG_DEC_ERROR;
 		return -1;
 	}
 	char fullPath[256] = "ux0:data/randomhentai/saved/\0";

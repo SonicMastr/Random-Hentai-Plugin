@@ -116,13 +116,13 @@ static void initializeMem(void) {
 void _start() __attribute__ ((weak, alias ("module_start")));
 int module_start(SceSize argc, const void *args) {
 
-	initializeMem();
 	HOOK(0, 0xB0F1E4EC, sceGxmInitialize_henTime);
 	HOOK(1, 0x05032658, sceGxmShaderPatcherCreate_henTime);
 	HOOK(2, 0x7A410B64, sceDisplaySetFrameBuf_henTime);
 	HOOK(3, 0xED0F6E25, sceGxmColorSurfaceInit_henTime);
 	HOOK(4, 0x8734FF4E, sceGxmBeginScene_henTime);
 	HOOK(5, 0xFE300E2F, sceGxmEndScene_henTime);
+	initializeMem();
 
 	SceUID thid;
 	thid = sceKernelCreateThread("hentai_thread", hentai_thread, 0x60, 0x10000, 0, 0, NULL);

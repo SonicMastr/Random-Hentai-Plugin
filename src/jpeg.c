@@ -496,7 +496,7 @@ int jpegdecTerm(void)
 int rh_JPEG_decoder_initialize(void)
 {
 	int ret = jpegdecInit(MAX_JPEG_BUF_SIZE, MAX_IMAGE_BUF_SIZE, MAX_COEF_BUF_SIZE);
-	if (ret != 0) {
+	if (ret < 0) {
 		printf("Failed to init JPEG Decoder\n");
 	}
 	return ret;

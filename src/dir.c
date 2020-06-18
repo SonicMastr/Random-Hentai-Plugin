@@ -33,7 +33,7 @@ void readDir() {
 	SceIoDirenter * current = head;
 
 	int dfd;
-	dfd = sceIoDopen("ux0:data/randomhentai/saved/");
+	dfd = sceIoDopen("ux0:data/randomhentai/saved/");  // Causing SCE_ERROR_ERRNO_ENODEV error in plugins involving retail games
 	if(dfd >= 0) { 
 		int res = 1;
 		while(res > 0) {
@@ -50,4 +50,5 @@ void readDir() {
 		sceIoDclose(dfd);
 		sceClibPrintf("File count: %d\n", length);
 	}
+	printf("sceIoDopen Out: 0x%08x\n\n\n\n\n\n\n", dfd);
 }
